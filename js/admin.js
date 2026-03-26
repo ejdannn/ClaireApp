@@ -352,18 +352,25 @@ function closeCreateModal() {
   document.getElementById('newGroupName').value = '';
   document.getElementById('newGroupDesc').value = '';
   document.getElementById('newGroupExpected').value = '';
+  document.getElementById('newGroupSlug').value = '';
   document.getElementById('createGroupError').classList.add('hidden');
 }
 
 async function createGroup() {
-  const name     = document.getElementById('newGroupName').value.trim();
-  const desc     = document.getElementById('newGroupDesc').value.trim();
-  const expected = document.getElementById('newGroupExpected').value
+  const name       = document.getElementById('newGroupName').value.trim();
+  const desc       = document.getElementById('newGroupDesc').value.trim();
+  const expected   = document.getElementById('newGroupExpected').value
     .split('\n').map(s => s.trim()).filter(Boolean);
+  const customSlug = document.getElementById('newGroupSlug').value.trim()
+    .toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/^-+|-+$/g, '').replace(/-{2,}/g, '-');
   const errEl = document.getElementById('createGroupError');
   errEl.classList.add('hidden');
 
   if (!name) { errEl.textContent = 'Please enter a group name.'; errEl.classList.remove('hidden'); return; }
+  if (customSlug && customSlug.length < 3) {
+    errEl.textContent = 'Custom link must be at least 3 characters.';
+    errEl.classList.remove('hidden'); return;
+  }
 
   const btn = document.getElementById('confirmCreateGroup');
   btn.disabled = true; btn.textContent = 'Creating…';
@@ -372,7 +379,7 @@ async function createGroup() {
     const res = await fetch('/api/create-group', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, description: desc, expectedMembers: expected, adminCode: getAdminCode() }),
+      body: JSON.stringify({ name, description: desc, expectedMembers: expected, customSlug: customSlug || undefined, adminCode: getAdminCode() }),
     });
     const data = await res.json();
 
@@ -610,7 +617,7 @@ function requestGoogleToken() {
   if (!googleTokenClient) {
     googleTokenClient = google.accounts.oauth2.initTokenClient({
       client_id: googleClientId,
-      scope: 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/spreadsheets',
+      scope: 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/gmail.send',
       callback: (resp) => {
         if (resp.error) { showToast('Google sign-in failed.', 'error'); return; }
         saveGoogleToken(resp.access_token, resp.expires_in || 3600);
@@ -631,6 +638,101 @@ function setGoogleDisconnected() {
   document.getElementById('googleStatusText').innerHTML =
     '<span class="google-disconnected">Not connected to Google</span>';
   document.getElementById('googleConnectBtn').textContent = 'Connect';
+}
+
+// ── Nudge ─────────────────────────────────────────────────
+function buildGmailRaw(to, subject, html) {
+  const msg = [
+    `To: ${to}`,
+    'MIME-Version: 1.0',
+    'Content-Type: text/html; charset=UTF-8',
+    `Subject: ${subject}`,
+    '',
+    html,
+  ].join('\r\n');
+  // Base64url encode (handles unicode)
+  return btoa(
+    encodeURIComponent(msg).replace(/%([0-9A-F]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)))
+  ).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+}
+
+async function nudgeMembers() {
+  const token = getGoogleToken();
+  if (!token) {
+    showToast('Connect Google first to send emails.', 'error');
+    return;
+  }
+
+  // Collect pending emails only (skip name-only entries)
+  const expected = currentGroup?.expected_members || [];
+  const responded = new Set(groupMembers.map(m => m.email.toLowerCase()));
+  const pendingEmails = expected
+    .filter(e => e.includes('@') && !responded.has(e.toLowerCase()));
+
+  if (!pendingEmails.length) {
+    showToast('No email addresses to nudge — add emails to the expected list.', 'info');
+    return;
+  }
+
+  const btn = document.getElementById('nudgeBtn');
+  btn.disabled = true;
+  btn.textContent = 'Sending...';
+
+  const link = groupLink(currentGroup.slug);
+  const groupName = escHtml(currentGroup.name);
+  let sent = 0, failed = 0;
+
+  for (const email of pendingEmails) {
+    const html = `
+      <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:24px;">
+        <div style="background:#F59E0B;border-radius:12px;padding:6px 16px;display:inline-block;margin-bottom:20px;">
+          <span style="color:#fff;font-weight:700;font-size:1.1rem;">Claire's Scheduling</span>
+        </div>
+        <h2 style="margin:0 0 12px;color:#1C1917;">Hey there!</h2>
+        <p style="color:#44403C;line-height:1.6;margin:0 0 16px;">
+          Just a friendly reminder that <strong>Claire</strong> is still waiting on your
+          weekly availability for <strong>${groupName}</strong>.
+        </p>
+        <p style="color:#44403C;line-height:1.6;margin:0 0 24px;">
+          It only takes a minute to fill out your free times, and it helps
+          Claire find the best meeting window for everyone.
+        </p>
+        <a href="${link}"
+          style="display:inline-block;background:#F59E0B;color:#fff;padding:13px 28px;
+                 border-radius:10px;text-decoration:none;font-weight:700;font-size:1rem;">
+          Fill Out My Availability
+        </a>
+        <p style="margin-top:28px;font-size:0.8rem;color:#A8A29E;">
+          Sent via Claire's Scheduling. You received this because someone added your email
+          to a scheduling group.
+        </p>
+      </div>`;
+
+    const raw = buildGmailRaw(email, `Reminder: fill out your availability for ${currentGroup.name}`, html);
+    try {
+      const res = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ raw }),
+      });
+      if (res.ok) {
+        sent++;
+      } else {
+        const err = await res.json();
+        if (err.error?.code === 403 || err.error?.code === 401) {
+          showToast('Google permission needed — please reconnect Google and try again.', 'error');
+          clearGoogleToken(); setGoogleDisconnected();
+          break;
+        }
+        failed++;
+      }
+    } catch { failed++; }
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Send Nudge';
+  if (sent)   showToast(`Nudge sent to ${sent} person${sent !== 1 ? 's' : ''}!`, 'success');
+  if (failed) showToast(`${failed} email${failed !== 1 ? 's' : ''} failed to send.`, 'error');
 }
 
 // ── Export to Google Sheets ───────────────────────────────

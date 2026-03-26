@@ -103,7 +103,10 @@
             <div id="pendingSection" class="hidden" style="margin-bottom:1.5rem;">
               <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.6rem;">
                 <h4 style="font-size:0.9rem;color:var(--text-muted);">Still waiting on...</h4>
-                <span id="pendingCount" class="badge" style="background:var(--danger-light);color:var(--danger);font-size:0.75rem;"></span>
+                <div style="display:flex;gap:0.5rem;align-items:center;">
+                  <span id="pendingCount" class="badge" style="background:var(--danger-light);color:var(--danger);font-size:0.75rem;"></span>
+                  <button class="btn btn-sm btn-secondary" id="nudgeBtn" onclick="nudgeMembers()"><span class="icon-emoji">📧</span> Send Nudge</button>
+                </div>
               </div>
               <div id="pendingList"></div>
             </div>
@@ -174,6 +177,14 @@
         <label for="newGroupExpected">Who do you expect to respond? (optional)</label>
         <p class="text-muted" style="font-size:0.8rem;margin-bottom:0.4rem;">One name or email per line. You'll see who hasn't filled out their availability yet.</p>
         <textarea id="newGroupExpected" placeholder="john@example.com&#10;Jane Smith&#10;bob@example.com" rows="3"></textarea>
+      </div>
+      <div class="form-group">
+        <label for="newGroupSlug">Custom Link (optional)</label>
+        <p class="text-muted" style="font-size:0.8rem;margin-bottom:0.4rem;">Customize the end of your group's URL. Only letters, numbers, and hyphens. Leave blank to generate one automatically.</p>
+        <div style="display:flex;align-items:center;gap:0.4rem;">
+          <span style="font-size:0.8rem;color:var(--text-muted);white-space:nowrap;">/g/</span>
+          <input type="text" id="newGroupSlug" placeholder="e.g. book-club or team-standup" maxlength="40" style="flex:1;" />
+        </div>
       </div>
       <div id="createGroupError" class="error-msg hidden"></div>
     </div>
