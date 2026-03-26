@@ -2,7 +2,7 @@
 //  CLAIRE — Admin dashboard (admin.html)
 // ─────────────────────────────────────────────────────────
 
-let supabase, currentGroup, groupMembers = [], googleTokenClient;
+let db, currentGroup, groupMembers = [], googleTokenClient;
 
 // ── Init ─────────────────────────────────────────────────
 (async function init() {
@@ -12,7 +12,7 @@ let supabase, currentGroup, groupMembers = [], googleTokenClient;
     return;
   }
 
-  try { supabase = getSupabase(); } catch (e) {
+  try { db = getSupabase(); } catch (e) {
     showToast(e.message, 'error'); return;
   }
 
@@ -25,7 +25,7 @@ let supabase, currentGroup, groupMembers = [], googleTokenClient;
 async function loadGroups() {
   show('groupsLoading'); hide('groupsGrid'); hide('groupsEmpty');
 
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from('groups')
     .select('*, members(count)')
     .order('created_at', { ascending: false });
@@ -94,7 +94,7 @@ async function openGroupDetail(group) {
 }
 
 async function loadGroupMembers(groupId) {
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from('members')
     .select('*')
     .eq('group_id', groupId)
@@ -149,7 +149,7 @@ function renderMembers() {
 
 async function removeMember(memberId, name) {
   if (!confirm(`Remove ${name} from this group?`)) return;
-  const { error } = await supabase.from('members').delete().eq('id', memberId);
+  const { error } = await db.from('members').delete().eq('id', memberId);
   if (error) { showToast('Failed to remove member.', 'error'); return; }
   groupMembers = groupMembers.filter(m => m.id !== memberId);
   renderMembers();
@@ -281,7 +281,7 @@ async function createGroup() {
 // ── Delete group ──────────────────────────────────────────
 async function confirmDeleteGroup(groupId, groupName) {
   if (!confirm(`Delete "${groupName}"? This will remove all member data and cannot be undone.`)) return;
-  const { error } = await supabase.from('groups').delete().eq('id', groupId);
+  const { error } = await db.from('groups').delete().eq('id', groupId);
   if (error) { showToast('Failed to delete group.', 'error'); return; }
   showToast(`"${groupName}" deleted.`, 'success');
   await loadGroups();

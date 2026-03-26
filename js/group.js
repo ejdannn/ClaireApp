@@ -2,7 +2,7 @@
 //  CLAIRE — Group availability form (group.html)
 // ─────────────────────────────────────────────────────────
 
-let supabase, groupData, existingMember;
+let db, groupData, existingMember;
 
 // availability[day] = Set of available slot indices
 const availability = {};
@@ -14,7 +14,7 @@ let dragAction  = 'add'; // 'add' | 'remove'
 
 // ── Init ─────────────────────────────────────────────────
 (async function init() {
-  try { supabase = getSupabase(); } catch (e) {
+  try { db = getSupabase(); } catch (e) {
     showConfigError(e.message); return;
   }
 
@@ -35,7 +35,7 @@ function getSlugFromURL() {
 }
 
 async function loadGroup(slug) {
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from('groups')
     .select('*')
     .eq('slug', slug)
@@ -76,7 +76,7 @@ async function checkExistingMember() {
   const email = document.getElementById('memberEmail').value.trim().toLowerCase();
   if (!email.includes('@')) return;
 
-  const { data } = await supabase
+  const { data } = await db
     .from('members')
     .select('*')
     .eq('group_id', groupData.id)
@@ -293,14 +293,14 @@ async function submitAvailability() {
   try {
     if (existingMember) {
       // Update existing
-      const { error } = await supabase
+      const { error } = await db
         .from('members')
         .update({ name, availability: avail, updated_at: new Date().toISOString() })
         .eq('id', existingMember.id);
       if (error) throw error;
     } else {
       // Insert new (upsert handles race conditions)
-      const { error } = await supabase
+      const { error } = await db
         .from('members')
         .upsert({ group_id: groupData.id, name, email, availability: avail }, { onConflict: 'group_id,email' });
       if (error) throw error;
