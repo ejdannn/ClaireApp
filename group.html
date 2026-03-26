@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Claire — Add Your Availability</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+
+<div class="group-layout">
+
+  <!-- Header -->
+  <div class="group-header">
+    <div id="groupLoadingHeader" class="loading-state" style="padding:1rem;">
+      <div class="spinner spinner-dark"></div>
+    </div>
+    <div id="groupHeaderContent" class="hidden">
+      <h1 id="groupNameDisplay">Loading…</h1>
+      <p id="groupDescDisplay" class="text-muted"></p>
+    </div>
+    <div id="groupNotFound" class="hidden">
+      <h1>Group Not Found</h1>
+      <p class="text-muted">This link may be invalid or expired. Check with whoever sent it to you.</p>
+    </div>
+  </div>
+
+  <!-- Body -->
+  <div class="group-body" id="groupBody" style="display:none;">
+
+    <!-- Step indicator -->
+    <div class="steps">
+      <div class="step-dot active" id="step1Dot">1</div>
+      <div class="step-line" id="stepLine1"></div>
+      <div class="step-dot" id="step2Dot">2</div>
+    </div>
+
+    <!-- Step 1: Name + Email -->
+    <div class="step-panel active" id="step1Panel">
+      <div class="info-card">
+        <h2>👋 Who are you?</h2>
+        <p class="subtitle">Enter your name and email so Claire can match your availability to you. If you've submitted before, your previous availability will load automatically.</p>
+
+        <div id="returningNotice" class="returning-notice hidden">
+          ✏️ Welcome back! Your previous availability has been loaded — update it however you like.
+        </div>
+
+        <div class="form-group">
+          <label for="memberName">Your Name <span style="color:var(--danger)">*</span></label>
+          <input type="text" id="memberName" placeholder="e.g. Alex Smith" autocomplete="name" />
+        </div>
+        <div class="form-group">
+          <label for="memberEmail">Your Email <span style="color:var(--danger)">*</span></label>
+          <input type="email" id="memberEmail" placeholder="you@example.com" autocomplete="email" />
+        </div>
+
+        <div id="step1Error" class="error-msg hidden"></div>
+
+        <button class="btn btn-primary btn-full mt-2" id="step1NextBtn">
+          Next: Set My Availability →
+        </button>
+      </div>
+    </div>
+
+    <!-- Step 2: Availability grid -->
+    <div class="step-panel" id="step2Panel">
+
+      <div class="avail-grid-wrapper">
+        <div class="avail-grid-header">
+          <div>
+            <h2>🗓 Your Weekly Availability</h2>
+            <p class="text-muted text-sm" style="margin-top:0.2rem;">
+              Tap the times you're <strong>generally free</strong> each week — not a specific date.
+            </p>
+          </div>
+          <div class="avail-legend">
+            <div class="legend-dot available"></div> Free
+            <div class="legend-dot unavailable" style="margin-left:0.5rem;"></div> Busy
+          </div>
+        </div>
+
+        <!-- Desktop hint -->
+        <p class="avail-hint grid-desktop">Click or click-and-drag to select your free times</p>
+        <!-- Mobile hint -->
+        <p class="avail-hint grid-mobile">Tap a day above, then tap your free time slots below</p>
+
+        <!-- ── Desktop grid ── -->
+        <div class="grid-desktop">
+          <div class="avail-grid" id="desktopGrid">
+            <!-- Rendered by JS -->
+          </div>
+        </div>
+
+        <!-- ── Mobile grid ── -->
+        <div class="grid-mobile">
+          <div class="day-tabs" id="dayTabs">
+            <!-- Day tab buttons rendered by JS -->
+          </div>
+          <div class="mobile-slot-list" id="mobileSlotList">
+            <!-- Slots rendered by JS -->
+          </div>
+        </div>
+
+        <!-- Quick actions -->
+        <div class="grid-quick-actions">
+          <button class="btn btn-ghost btn-sm" id="clearAllBtn">Clear All</button>
+          <button class="btn btn-ghost btn-sm" id="selectWeekdaysBtn">Weekdays 9–5</button>
+          <button class="btn btn-ghost btn-sm" id="selectEveningsBtn">Evenings 6–9pm</button>
+        </div>
+      </div>
+
+      <!-- Submit -->
+      <div class="submit-section">
+        <button class="btn btn-ghost" id="step2BackBtn">← Back</button>
+        <button class="btn btn-primary btn-lg" id="submitBtn" style="flex:1;">
+          <span id="submitBtnText">Save My Availability ✓</span>
+          <span id="submitSpinner" class="spinner hidden"></span>
+        </button>
+      </div>
+
+      <div id="submitError" class="error-msg hidden mt-2"></div>
+    </div>
+
+    <!-- Done state -->
+    <div class="step-panel" id="donePanelWrap" style="display:none;">
+      <div class="info-card" style="text-align:center; padding:3rem 2rem;">
+        <div style="font-size:4rem; margin-bottom:1rem;">🎉</div>
+        <h2>You're all set!</h2>
+        <p class="subtitle" style="max-width:320px; margin:0 auto 1.5rem;">
+          Your availability has been saved. Claire will find the best time for the group automatically.
+        </p>
+        <button class="btn btn-secondary" id="editAgainBtn">Edit My Availability</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<!-- Supabase CDN -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="/js/config.js"></script>
+<script src="/js/utils.js"></script>
+<script src="/js/group.js"></script>
+</body>
+</html>

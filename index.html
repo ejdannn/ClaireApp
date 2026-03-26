@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Claire — Smart Group Scheduling</title>
+  <meta name="description" content="Share your weekly availability and find the perfect meeting time — automatically." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+
+<div class="landing">
+  <div class="landing-hero">
+    <div class="landing-logo">☀️</div>
+    <h1>Claire</h1>
+    <p>Smart scheduling for groups. Share your weekly availability once — find the perfect time automatically.</p>
+  </div>
+
+  <div class="landing-card">
+
+    <!-- Admin access -->
+    <div class="access-section">
+      <h2>🔑 Admin Access</h2>
+      <p>Enter your access code to manage groups and view everyone's schedules.</p>
+      <div class="input-group">
+        <input type="password" id="adminCode" placeholder="Enter access code…" autocomplete="off" />
+        <button class="btn btn-primary" id="adminBtn">Enter →</button>
+      </div>
+      <div id="adminError" class="error-msg hidden"></div>
+    </div>
+
+    <div class="divider">or</div>
+
+    <!-- Group link entry -->
+    <div class="link-section">
+      <h2>📅 Have a Group Link?</h2>
+      <p>Paste the link or short code you were sent to fill in your availability.</p>
+      <div class="input-group">
+        <input type="text" id="groupLink" placeholder="Paste link or group code…" />
+        <button class="btn btn-secondary" id="groupBtn">Go →</button>
+      </div>
+      <div id="groupError" class="error-msg hidden"></div>
+    </div>
+
+  </div>
+
+  <p class="landing-footer">Made with ☀️ for Claire</p>
+</div>
+
+<div id="toast-container"></div>
+
+<script src="/js/config.js"></script>
+<script src="/js/utils.js"></script>
+<script src="/js/main.js"></script>
+</body>
+</html>

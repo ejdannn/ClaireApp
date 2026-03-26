@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Claire Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/style.css" />
+  <!-- Google Identity Services (for Calendar + Sheets) -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+
+<div class="admin-layout" id="adminApp">
+
+  <!-- Header -->
+  <header class="admin-header">
+    <div class="admin-header-inner">
+      <div class="admin-brand">
+        <span class="admin-brand-icon">☀️</span>
+        Claire Admin
+      </div>
+      <div class="admin-header-actions">
+        <div id="googleStatusBar" class="google-connect-bar" style="padding:0.5rem 0.75rem; margin-bottom:0;">
+          <span class="google-icon">🗓</span>
+          <span class="status-text" id="googleStatusText">
+            <span class="google-disconnected">Not connected to Google</span>
+          </span>
+          <button class="btn btn-sm btn-secondary" id="googleConnectBtn">Connect</button>
+        </div>
+        <button class="btn btn-ghost btn-sm" id="logoutBtn">Log out</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main body -->
+  <main class="admin-body">
+
+    <!-- Groups list view -->
+    <div id="groupsView">
+      <div class="groups-header">
+        <div>
+          <h2>Your Groups</h2>
+          <p class="text-muted text-sm" style="margin-top:0.25rem;">Create a group link and send it to the people you want to schedule with.</p>
+        </div>
+        <button class="btn btn-primary" id="createGroupBtn">+ New Group</button>
+      </div>
+
+      <div id="groupsLoading" class="loading-state">
+        <div class="spinner spinner-dark"></div>
+        <span>Loading your groups…</span>
+      </div>
+
+      <div id="groupsGrid" class="groups-grid hidden"></div>
+
+      <div id="groupsEmpty" class="empty-state hidden">
+        <div class="empty-icon">📅</div>
+        <h3>No groups yet</h3>
+        <p>Create your first group to get a shareable link you can send to friends, teammates, or anyone you need to schedule with.</p>
+        <button class="btn btn-primary" onclick="document.getElementById('createGroupBtn').click()">Create Your First Group</button>
+      </div>
+    </div>
+
+    <!-- Group detail view -->
+    <div id="groupDetailView" class="hidden">
+      <button class="btn btn-ghost btn-sm" id="backToGroupsBtn" style="margin-bottom:1.25rem;">← Back to Groups</button>
+
+      <div class="group-detail">
+        <div class="group-detail-header">
+          <div>
+            <div class="group-detail-title" id="detailGroupName">Group Name</div>
+            <div class="group-detail-link">
+              Share: <code id="detailGroupLink">—</code>
+              <button class="btn btn-sm btn-secondary" id="detailCopyLinkBtn">Copy Link</button>
+            </div>
+          </div>
+          <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+            <button class="btn btn-sm btn-ghost" id="detailExportBtn">📊 Export to Sheets</button>
+            <button class="btn btn-sm btn-primary" id="detailScheduleBtn">📅 Schedule Meeting</button>
+          </div>
+        </div>
+
+        <div class="group-detail-body">
+          <div class="tabs">
+            <button class="tab-btn active" data-tab="members">👥 Members</button>
+            <button class="tab-btn" data-tab="availability">🗓 Availability Overlay</button>
+            <button class="tab-btn" data-tab="recommend">✨ Best Times</button>
+          </div>
+
+          <!-- Members tab -->
+          <div id="tab-members" class="tab-panel">
+            <div id="membersLoading" class="loading-state hidden">
+              <div class="spinner spinner-dark"></div><span>Loading members…</span>
+            </div>
+            <div id="membersList" class="members-list"></div>
+            <div id="membersEmpty" class="empty-state hidden" style="padding:2rem;">
+              <div class="empty-icon" style="font-size:2.5rem;">👥</div>
+              <h3>No responses yet</h3>
+              <p>Share the link above! Once people fill it in, they'll show up here.</p>
+            </div>
+          </div>
+
+          <!-- Availability overlay tab -->
+          <div id="tab-availability" class="tab-panel hidden">
+            <p class="text-muted text-sm" style="margin-bottom:1rem;">
+              Color shows how many members are free at each time.
+              <span style="color:#22C55E;font-weight:600;">Green</span> = everyone is available.
+            </p>
+            <div id="heatmapLoading" class="loading-state hidden">
+              <div class="spinner spinner-dark"></div><span>Building overlay…</span>
+            </div>
+            <div id="heatmapWrapper" class="heatmap-wrapper">
+              <div id="heatmapGrid" class="heatmap-grid"></div>
+            </div>
+            <div class="heatmap-legend" id="heatmapLegend" style="margin-top:0.75rem;"></div>
+            <div id="heatmapEmpty" class="empty-state hidden" style="padding:2rem;">
+              <div class="empty-icon" style="font-size:2.5rem;">🗓</div>
+              <p>No availability data yet. Share the link to get responses.</p>
+            </div>
+          </div>
+
+          <!-- Recommended times tab -->
+          <div id="tab-recommend" class="tab-panel hidden">
+            <p class="text-muted text-sm" style="margin-bottom:1rem;">
+              Best 1-hour windows where the most members are free each week.
+            </p>
+            <div id="recTimesGrid" class="rec-times-grid"></div>
+            <div id="recEmpty" class="empty-state hidden" style="padding:2rem;">
+              <div class="empty-icon" style="font-size:2.5rem;">✨</div>
+              <p>Not enough data yet. Wait for members to fill in their availability.</p>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ── Create Group Modal ── -->
+<div id="createGroupModal" class="modal-backdrop hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Create New Group</h3>
+      <button class="btn-icon" id="closeCreateModal">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label for="newGroupName">Group Name <span style="color:var(--danger)">*</span></label>
+        <input type="text" id="newGroupName" placeholder="e.g. Study Group, Book Club, Team Standup…" maxlength="60" />
+      </div>
+      <div class="form-group">
+        <label for="newGroupDesc">Description (optional)</label>
+        <textarea id="newGroupDesc" placeholder="What is this group for? (shown to members when they fill in their availability)" rows="2"></textarea>
+      </div>
+      <div id="createGroupError" class="error-msg hidden"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="cancelCreateGroup">Cancel</button>
+      <button class="btn btn-primary" id="confirmCreateGroup">Create Group →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Schedule Meeting Modal ── -->
+<div id="scheduleModal" class="modal-backdrop hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>📅 Schedule a Meeting</h3>
+      <button class="btn-icon" id="closeScheduleModal">✕</button>
+    </div>
+    <div class="modal-body">
+
+      <!-- Step 1: Pick a time -->
+      <div id="scheduleStep1">
+        <h4 style="margin-bottom:0.75rem;">1. Pick a time slot</h4>
+        <div id="recTimeOptions" class="time-slot-options"></div>
+
+        <details style="margin-top:0.75rem;">
+          <summary style="cursor:pointer; font-size:0.875rem; color:var(--text-muted); font-weight:500;">
+            Or choose a custom time
+          </summary>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem; margin-top:0.75rem;">
+            <div class="form-group" style="margin-bottom:0;">
+              <label>Date</label>
+              <input type="date" id="customDate" />
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+              <label>Start Time</label>
+              <input type="time" id="customStartTime" />
+            </div>
+          </div>
+        </details>
+      </div>
+
+      <hr style="border:none; border-top:1px solid var(--border); margin:1.25rem 0;" />
+
+      <!-- Step 2: Meeting details -->
+      <h4 style="margin-bottom:0.75rem;">2. Meeting details</h4>
+
+      <div class="form-group">
+        <label for="meetingTitle">Meeting Title <span style="color:var(--danger)">*</span></label>
+        <input type="text" id="meetingTitle" placeholder="e.g. Weekly Check-In, Study Session…" />
+      </div>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem;">
+        <div class="form-group">
+          <label for="meetingDuration">Duration</label>
+          <select id="meetingDuration">
+            <option value="1">30 minutes</option>
+            <option value="2" selected>1 hour</option>
+            <option value="3">1.5 hours</option>
+            <option value="4">2 hours</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="meetingLocation">Location (optional)</label>
+          <input type="text" id="meetingLocation" placeholder="Room, Zoom link, etc." />
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="meetingNotes">Notes / Description (optional)</label>
+        <textarea id="meetingNotes" placeholder="Agenda, what to bring, etc." rows="2"></textarea>
+      </div>
+
+      <!-- Attendees -->
+      <div class="form-group">
+        <label>Attendees (uncheck to exclude)</label>
+        <div id="attendeeList" class="attendee-list"></div>
+      </div>
+
+      <!-- Google not connected warning -->
+      <div id="googleWarning" class="google-connect-bar hidden" style="margin-top:0.75rem;">
+        <span class="google-icon">🗓</span>
+        <span class="status-text google-disconnected">Connect Google Calendar to send invites automatically.</span>
+        <button class="btn btn-sm btn-secondary" id="scheduleConnectGoogle">Connect</button>
+      </div>
+
+      <div id="scheduleError" class="error-msg hidden"></div>
+      <div id="scheduleSuccess" class="success-msg hidden"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="cancelSchedule">Cancel</button>
+      <button class="btn btn-primary" id="confirmSchedule">
+        <span id="scheduleButtonText">Create &amp; Send Invite 🗓</span>
+        <span id="scheduleSpinner" class="spinner hidden"></span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<!-- Supabase CDN -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="/js/config.js"></script>
+<script src="/js/utils.js"></script>
+<script src="/js/admin.js"></script>
+</body>
+</html>
