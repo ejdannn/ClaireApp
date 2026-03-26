@@ -107,6 +107,9 @@ async function checkExistingMember() {
       const tzSel = document.getElementById('memberTimezone');
       if (tzSel) tzSel.value = avail.tz;
     }
+    // Refresh the grid so existing slots are visually shown
+    refreshDesktopGrid();
+    refreshMobileSlots();
     show('returningNotice');
   } else {
     existingMember = null;
@@ -338,7 +341,7 @@ function setSubmitLoading(on) {
 
 function showDoneState() {
   document.getElementById('step2Panel').classList.remove('active');
-  document.getElementById('donePanelWrap').style.display = '';
+  document.getElementById('donePanelWrap').style.display = 'block';
   document.getElementById('step2Dot').classList.remove('active');
   document.getElementById('step2Dot').classList.add('done');
   document.getElementById('step2Dot').textContent = '✓';
