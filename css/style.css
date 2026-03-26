@@ -538,6 +538,36 @@ label {
 .member-email { font-size: 0.8125rem; color: var(--text-muted); }
 .member-submitted { font-size: 0.75rem; color: var(--text-light); }
 
+/* Activity dots */
+.activity-dot {
+  width: 9px; height: 9px; border-radius: 50%;
+  display: inline-block; flex-shrink: 0;
+}
+.activity-dot.green  { background: var(--success); }
+.activity-dot.yellow { background: var(--primary); }
+.activity-dot.red    { background: var(--danger); }
+
+/* Pending members */
+.pending-item {
+  display: flex; align-items: center; gap: 0.6rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--danger-light); border-radius: var(--radius-sm);
+  margin-bottom: 0.4rem; font-size: 0.875rem; color: var(--text);
+}
+
+/* Slot detail modal names */
+.slot-detail-name {
+  padding: 0.35rem 0.6rem;
+  background: var(--surface2);
+  border-radius: var(--radius-sm);
+  margin-bottom: 0.3rem;
+  font-size: 0.875rem;
+}
+
+/* Clickable heatmap cells */
+.heatmap-cell { cursor: pointer; }
+.heatmap-cell:hover { opacity: 0.75; }
+
 /* Heatmap */
 .heatmap-wrapper {
   overflow-x: auto;

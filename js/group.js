@@ -273,21 +273,6 @@ document.getElementById('clearAllBtn').addEventListener('click', () => {
   refreshDesktopGrid(); refreshMobileSlots();
 });
 
-document.getElementById('selectWeekdaysBtn').addEventListener('click', () => {
-  // Mon-Fri, 9am–5pm = slots 6..19
-  for (let d = 0; d < 5; d++) {
-    for (let s = 6; s < 22; s++) availability[d].add(s); // 9am–5pm
-  }
-  refreshDesktopGrid(); refreshMobileSlots();
-});
-
-document.getElementById('selectEveningsBtn').addEventListener('click', () => {
-  // Mon-Sun, 6pm–9pm = slots 24..29
-  for (let d = 0; d < 7; d++) {
-    for (let s = 24; s < 30; s++) availability[d].add(s);
-  }
-  refreshDesktopGrid(); refreshMobileSlots();
-});
 
 // ── Submit ────────────────────────────────────────────────
 document.getElementById('submitBtn').addEventListener('click', submitAvailability);

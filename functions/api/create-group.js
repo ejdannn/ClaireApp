@@ -16,9 +16,9 @@ export async function onRequestOptions() {
 export async function onRequestPost(context) {
   const { request, env } = context;
 
-  let name, description, adminCode;
+  let name, description, adminCode, expectedMembers;
   try {
-    ({ name, description, adminCode } = await request.json());
+    ({ name, description, adminCode, expectedMembers } = await request.json());
   } catch {
     return new Response(JSON.stringify({ error: 'Invalid request body' }), { status: 400, headers: CORS });
   }
@@ -59,6 +59,7 @@ export async function onRequestPost(context) {
       name: name.trim(),
       description: (description || '').trim(),
       slug,
+      expected_members: Array.isArray(expectedMembers) ? expectedMembers : [],
     }),
   });
 

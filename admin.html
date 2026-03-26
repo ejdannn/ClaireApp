@@ -98,9 +98,19 @@
             <div id="membersLoading" class="loading-state hidden">
               <div class="spinner spinner-dark"></div><span>Loading members…</span>
             </div>
+
+            <!-- Pending / waiting section -->
+            <div id="pendingSection" class="hidden" style="margin-bottom:1.5rem;">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.6rem;">
+                <h4 style="font-size:0.9rem;color:var(--text-muted);">Still waiting on...</h4>
+                <span id="pendingCount" class="badge" style="background:var(--danger-light);color:var(--danger);font-size:0.75rem;"></span>
+              </div>
+              <div id="pendingList"></div>
+            </div>
+
             <div id="membersList" class="members-list"></div>
             <div id="membersEmpty" class="empty-state hidden" style="padding:2rem;">
-              <div class="empty-icon" style="font-size:2.5rem;">👥</div>
+              <div class="empty-icon" style="font-size:2.5rem;"><span class="icon-emoji">👥</span></div>
               <h3>No responses yet</h3>
               <p>Share the link above! Once people fill it in, they'll show up here.</p>
             </div>
@@ -159,6 +169,11 @@
       <div class="form-group">
         <label for="newGroupDesc">Description (optional)</label>
         <textarea id="newGroupDesc" placeholder="What is this group for? (shown to members when they fill in their availability)" rows="2"></textarea>
+      </div>
+      <div class="form-group">
+        <label for="newGroupExpected">Who do you expect to respond? (optional)</label>
+        <p class="text-muted" style="font-size:0.8rem;margin-bottom:0.4rem;">One name or email per line. You'll see who hasn't filled out their availability yet.</p>
+        <textarea id="newGroupExpected" placeholder="john@example.com&#10;Jane Smith&#10;bob@example.com" rows="3"></textarea>
       </div>
       <div id="createGroupError" class="error-msg hidden"></div>
     </div>
@@ -270,6 +285,17 @@
         <span id="scheduleSpinner" class="spinner hidden"></span>
       </button>
     </div>
+  </div>
+</div>
+
+<!-- ── Slot Detail Modal ── -->
+<div id="slotDetailModal" class="modal-backdrop hidden">
+  <div class="modal" style="max-width:380px;">
+    <div class="modal-header">
+      <h3 id="slotDetailTitle">Time Slot</h3>
+      <button class="btn-icon" id="closeSlotDetailModal">✕</button>
+    </div>
+    <div class="modal-body" id="slotDetailContent"></div>
   </div>
 </div>
 

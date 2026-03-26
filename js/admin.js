@@ -143,24 +143,64 @@ function switchTab(tab) {
 }
 
 // ── Members tab ───────────────────────────────────────────
+function activityDot(dateStr) {
+  if (!dateStr) return '<span class="activity-dot red" title="No activity"></span>';
+  const days = (Date.now() - new Date(dateStr)) / 86400000;
+  if (days < 7)  return '<span class="activity-dot green" title="Updated recently"></span>';
+  if (days < 30) return '<span class="activity-dot yellow" title="Updated a while ago"></span>';
+  return '<span class="activity-dot red" title="Updated a long time ago"></span>';
+}
+
+function renderPending() {
+  const expected = currentGroup?.expected_members || [];
+  if (!expected.length) { hide('pendingSection'); return; }
+
+  const respondedEmails = new Set(groupMembers.map(m => m.email.toLowerCase()));
+  const respondedNames  = new Set(groupMembers.map(m => m.name.toLowerCase()));
+
+  const pending = expected.filter(e => {
+    const lower = e.toLowerCase();
+    if (lower.includes('@')) return !respondedEmails.has(lower);
+    return !Array.from(respondedNames).some(n => n.includes(lower) || lower.includes(n));
+  });
+
+  if (!pending.length) { hide('pendingSection'); return; }
+
+  show('pendingSection');
+  document.getElementById('pendingCount').textContent = `${pending.length} pending`;
+  document.getElementById('pendingList').innerHTML = pending.map(p => `
+    <div class="pending-item">
+      <span class="activity-dot red"></span>
+      <span>${escHtml(p)}</span>
+    </div>`).join('');
+}
+
 function renderMembers() {
-  const list = document.getElementById('membersList');
+  const list  = document.getElementById('membersList');
   const empty = document.getElementById('membersEmpty');
+
+  renderPending();
 
   if (!groupMembers.length) { list.innerHTML = ''; show('membersEmpty'); return; }
   hide('membersEmpty');
 
-  list.innerHTML = groupMembers.map(m => `
+  const sorted = [...groupMembers].sort((a, b) =>
+    new Date(b.updated_at || b.created_at) - new Date(a.updated_at || a.created_at)
+  );
+
+  list.innerHTML = sorted.map(m => `
     <div class="member-item">
-      <div>
-        <div class="member-name">${escHtml(m.name)}</div>
-        <div class="member-email">${escHtml(m.email)}</div>
+      <div style="display:flex;align-items:center;gap:0.5rem;">
+        ${activityDot(m.updated_at || m.created_at)}
+        <div>
+          <div class="member-name">${escHtml(m.name)}</div>
+          <div class="member-email">${escHtml(m.email)}</div>
+        </div>
       </div>
       <div style="display:flex;align-items:center;gap:0.5rem;">
-        <span class="badge badge-success">✓ Submitted</span>
-        <span class="member-submitted">${relativeTime(m.updated_at || m.created_at)}</span>
+        <span class="member-submitted" style="font-size:0.78rem;color:var(--text-muted);">Updated ${relativeTime(m.updated_at || m.created_at)}</span>
         <button class="btn-icon" title="Remove member"
-          onclick="removeMember('${m.id}','${escHtml(m.name)}')">🗑</button>
+          onclick="removeMember('${m.id}','${escHtml(m.name)}')"><span class="icon-emoji">🗑</span></button>
       </div>
     </div>`).join('');
 }
@@ -203,7 +243,8 @@ function renderHeatmap() {
       const intensity = count / total;
       const bg = heatColor(intensity);
       const tip = `${DAYS[d]} ${slotToTime(s)}: ${count}/${total} available`;
-      html += `<div class="heatmap-cell" style="background:${bg}" title="${tip}"></div>`;
+      html += `<div class="heatmap-cell" style="background:${bg}" title="${tip}"
+        data-day="${d}" data-slot="${s}" onclick="showSlotDetail(${d},${s})"></div>`;
     }
   }
 
@@ -216,6 +257,43 @@ function renderHeatmap() {
     <div class="heatmap-legend-swatch" style="background:#F59E0B"></div> Most &nbsp;
     <div class="heatmap-legend-swatch" style="background:#22C55E"></div> All available`;
 }
+
+// ── Slot detail popup ─────────────────────────────────────
+function showSlotDetail(day, slot) {
+  const tzMembers = getMembersInAdminTz();
+  const available   = tzMembers.filter(m => (m.availability?.[day] || []).includes(slot));
+  const unavailable = tzMembers.filter(m => !(m.availability?.[day] || []).includes(slot));
+  const adminTz     = getAdminTimezone();
+  const tzLabel     = adminTz.split('/').pop().replace(/_/g, ' ');
+
+  document.getElementById('slotDetailTitle').textContent =
+    `${DAYS[day]} at ${slotToTime(slot)}`;
+
+  document.getElementById('slotDetailContent').innerHTML = `
+    <p class="text-muted" style="font-size:0.8rem;margin-bottom:1rem;">Times shown in ${tzLabel}</p>
+    <div style="margin-bottom:1rem;">
+      <div style="font-weight:600;color:var(--success);margin-bottom:0.4rem;">
+        <span class="icon-emoji">✅</span> Free (${available.length})
+      </div>
+      ${available.length
+        ? available.map(m => `<div class="slot-detail-name">${escHtml(m.name)}</div>`).join('')
+        : '<p class="text-muted" style="font-size:0.85rem;">Nobody is free</p>'}
+    </div>
+    <div>
+      <div style="font-weight:600;color:var(--danger);margin-bottom:0.4rem;">
+        <span class="icon-emoji">❌</span> Busy (${unavailable.length})
+      </div>
+      ${unavailable.length
+        ? unavailable.map(m => `<div class="slot-detail-name">${escHtml(m.name)}</div>`).join('')
+        : '<p class="text-muted" style="font-size:0.85rem;">Nobody is busy</p>'}
+    </div>`;
+
+  document.getElementById('slotDetailModal').classList.remove('hidden');
+}
+
+document.getElementById('closeSlotDetailModal').addEventListener('click', () => {
+  document.getElementById('slotDetailModal').classList.add('hidden');
+});
 
 // ── Recommended times tab ─────────────────────────────────
 function renderRecommended() {
@@ -273,12 +351,15 @@ function closeCreateModal() {
   hide('createGroupModal');
   document.getElementById('newGroupName').value = '';
   document.getElementById('newGroupDesc').value = '';
+  document.getElementById('newGroupExpected').value = '';
   document.getElementById('createGroupError').classList.add('hidden');
 }
 
 async function createGroup() {
-  const name = document.getElementById('newGroupName').value.trim();
-  const desc = document.getElementById('newGroupDesc').value.trim();
+  const name     = document.getElementById('newGroupName').value.trim();
+  const desc     = document.getElementById('newGroupDesc').value.trim();
+  const expected = document.getElementById('newGroupExpected').value
+    .split('\n').map(s => s.trim()).filter(Boolean);
   const errEl = document.getElementById('createGroupError');
   errEl.classList.add('hidden');
 
@@ -291,7 +372,7 @@ async function createGroup() {
     const res = await fetch('/api/create-group', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, description: desc, adminCode: getAdminCode() }),
+      body: JSON.stringify({ name, description: desc, expectedMembers: expected, adminCode: getAdminCode() }),
     });
     const data = await res.json();
 
