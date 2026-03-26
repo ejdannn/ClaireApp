@@ -22,7 +22,7 @@ async function verifyAdmin() {
   hideError(adminError);
 
   try {
-    const res = await fetch('/.netlify/functions/verify-admin', {
+    const res = await fetch('/api/verify-admin', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code }),
@@ -37,7 +37,7 @@ async function verifyAdmin() {
       adminCodeInput.focus();
     }
   } catch {
-    showError(adminError, 'Network error. Make sure the site is deployed on Netlify.');
+    showError(adminError, 'Network error. Make sure the site is deployed on Cloudflare Pages.');
   } finally {
     adminBtn.disabled = false;
     adminBtn.textContent = 'Enter →';

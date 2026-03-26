@@ -1,24 +1,2 @@
-[build]
-  functions = "netlify/functions"
-  publish = "."
-
-[[redirects]]
-  from = "/admin"
-  to = "/admin.html"
-  status = 200
-
-[[redirects]]
-  from = "/group"
-  to = "/group.html"
-  status = 200
-
-[[redirects]]
-  from = "/g/:slug"
-  to = "/group.html?id=:slug"
-  status = 200
-
-[[headers]]
-  for = "/*"
-    [headers.values]
-    X-Frame-Options = "SAMEORIGIN"
-    X-Content-Type-Options = "nosniff"
+# This file is no longer used — Claire is now hosted on Cloudflare Pages.
+# Routing is handled by _redirects and the functions/ directory.

@@ -258,7 +258,7 @@ async function createGroup() {
   btn.disabled = true; btn.textContent = 'Creating…';
 
   try {
-    const res = await fetch('/.netlify/functions/create-group', {
+    const res = await fetch('/api/create-group', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, description: desc, adminCode: getAdminCode() }),
