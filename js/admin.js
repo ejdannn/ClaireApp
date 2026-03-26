@@ -634,54 +634,265 @@ function setGoogleDisconnected() {
 }
 
 // ── Export to Google Sheets ───────────────────────────────
+
+// Convert a slot array to readable time ranges e.g. "9:00 AM - 12:00 PM, 2:00 PM - 5:00 PM"
+function slotsToTimeRanges(slots) {
+  if (!slots || !slots.length) return 'Not available';
+  const sorted = [...slots].sort((a, b) => a - b);
+  const ranges = [];
+  let start = sorted[0], prev = sorted[0];
+  for (let i = 1; i < sorted.length; i++) {
+    if (sorted[i] === prev + 1) { prev = sorted[i]; continue; }
+    ranges.push(`${slotToTime(start)} - ${slotToTime(prev + 1)}`);
+    start = prev = sorted[i];
+  }
+  ranges.push(`${slotToTime(start)} - ${slotToTime(prev + 1)}`);
+  return ranges.join(', ');
+}
+
+// Sheets API helpers
+function sheetFmtReq(sheetId, r1, c1, r2, c2, fmt) {
+  return { repeatCell: {
+    range: { sheetId, startRowIndex: r1, endRowIndex: r2, startColumnIndex: c1, endColumnIndex: c2 },
+    cell: { userEnteredFormat: fmt },
+    fields: 'userEnteredFormat',
+  }};
+}
+function sheetMergeReq(sheetId, r1, c1, r2, c2) {
+  return { mergeCells: {
+    range: { sheetId, startRowIndex: r1, endRowIndex: r2, startColumnIndex: c1, endColumnIndex: c2 },
+    mergeType: 'MERGE_ALL',
+  }};
+}
+function sheetColWidthReq(sheetId, col, width) {
+  return { updateDimensionProperties: {
+    range: { sheetId, dimension: 'COLUMNS', startIndex: col, endIndex: col + 1 },
+    properties: { pixelSize: width }, fields: 'pixelSize',
+  }};
+}
+function sheetFreezeReq(sheetId, rows, cols) {
+  return { updateSheetProperties: {
+    properties: { sheetId, gridProperties: { frozenRowCount: rows, frozenColumnCount: cols } },
+    fields: 'gridProperties.frozenRowCount,gridProperties.frozenColumnCount',
+  }};
+}
+function heatRgb(intensity) {
+  if (intensity >= 1)    return { red: 0.18, green: 0.8,  blue: 0.44 }; // green  - all free
+  if (intensity >= 0.75) return { red: 0.55, green: 0.87, blue: 0.35 }; // lime   - most free
+  if (intensity >= 0.5)  return { red: 0.98, green: 0.88, blue: 0.30 }; // yellow - half free
+  return                         { red: 0.98, green: 0.73, blue: 0.01 }; // amber  - few free
+}
+
 async function exportToSheets() {
   const token = getGoogleToken();
-  if (!token) {
-    showToast('Connect Google Calendar/Sheets first.', 'error');
-    requestGoogleToken();
-    return;
-  }
-  if (!groupMembers.length) { showToast('No members to export.', 'error'); return; }
+  if (!token) { showToast('Connect Google Calendar/Sheets first.', 'error'); requestGoogleToken(); return; }
+  const members = getMembersInAdminTz();
+  if (!members.length) { showToast('No members to export.', 'error'); return; }
 
-  showToast('Creating spreadsheet…', 'info');
+  showToast('Building spreadsheet...', 'info');
+
+  const AMBER  = { red: 0.96, green: 0.62, blue: 0.04 };
+  const DARK   = { red: 0.13, green: 0.13, blue: 0.13 };
+  const DARK2  = { red: 0.22, green: 0.22, blue: 0.22 };
+  const WHITE  = { red: 1, green: 1, blue: 1 };
+  const PALE   = { red: 1,    green: 0.98, blue: 0.93 };
+  const adminTz = getAdminTimezone().split('/').pop().replace(/_/g,' ');
+  const exported = new Date().toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
 
   try {
-    // Create spreadsheet
+    // ── 1. Create spreadsheet with 3 sheets ──────────────
     const createRes = await fetch('https://sheets.googleapis.com/v4/spreadsheets', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ properties: { title: `${currentGroup.name} : Availability` } }),
+      body: JSON.stringify({
+        properties: { title: `${currentGroup.name} - Availability` },
+        sheets: [
+          { properties: { sheetId: 10, title: 'Individual',  index: 0 } },
+          { properties: { sheetId: 20, title: 'Heatmap',     index: 1 } },
+          { properties: { sheetId: 30, title: 'Best Times',  index: 2 } },
+        ],
+      }),
     });
-    const sheet = await createRes.json();
-    if (!createRes.ok) throw new Error(sheet.error?.message || 'Failed to create sheet.');
+    const created = await createRes.json();
+    if (!createRes.ok) throw new Error(created.error?.message || 'Failed to create spreadsheet.');
+    const sid = created.spreadsheetId;
 
-    // Build data: headers row, then one row per time/day combo
-    const memberNames = groupMembers.map(m => m.name);
-    const rows = [['Day', 'Time', ...memberNames]];
+    // ── 2. Build data arrays ──────────────────────────────
 
-    for (let d = 0; d < 7; d++) {
-      for (let s = 0; s < TOTAL_SLOTS; s++) {
-        const row = [DAYS[d], slotToTime(s)];
-        for (const m of groupMembers) {
-          const avail = m.availability?.[d] || [];
-          row.push(avail.includes(s) ? '✓' : '');
-        }
-        rows.push(row);
+    // Individual sheet: one row per member, free time ranges per day
+    const indivRows = [
+      [`${currentGroup.name} - Availability`, ...Array(8).fill('')],
+      [`Exported ${exported}  |  Times in ${adminTz}`, ...Array(8).fill('')],
+      Array(9).fill(''),
+      ['Name', 'Email', ...DAYS],
+      ...members.map(m => [
+        m.name, m.email,
+        ...DAYS.map((_, d) => slotsToTimeRanges(m.availability?.[d] || [])),
+      ]),
+    ];
+
+    // Heatmap sheet
+    const total  = members.length;
+    const matrix = Array.from({ length: 7 }, () => new Array(TOTAL_SLOTS).fill(0));
+    for (const m of members) {
+      for (let d = 0; d < 7; d++) {
+        for (const s of (m.availability?.[d] || [])) { if (s < TOTAL_SLOTS) matrix[d][s]++; }
       }
     }
+    const heatRows = [
+      [`${currentGroup.name} - Availability Heatmap`, ...Array(7).fill('')],
+      [`${total} member${total!==1?'s':''} | Exported ${exported} | ${adminTz}`, ...Array(7).fill('')],
+      Array(8).fill(''),
+      ['Time', ...DAYS_SHORT],
+      ...Array.from({ length: TOTAL_SLOTS }, (_, s) => [
+        slotToTime(s),
+        ...DAYS_SHORT.map((__, d) => matrix[d][s] > 0 ? `${matrix[d][s]}/${total}` : ''),
+      ]),
+    ];
 
-    // Write data
-    await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${sheet.spreadsheetId}/values/A1?valueInputOption=RAW`,
-      {
-        method: 'PUT',
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ values: rows }),
+    // Best Times sheet
+    const recs = getRecommendedTimes(members);
+    const bestRows = [
+      [`${currentGroup.name} - Best Meeting Times`, '', '', '', ''],
+      [`Top windows | Exported ${exported}`, '', '', '', ''],
+      ['', '', '', '', ''],
+      ['Rank', 'Day', 'Time', 'Available', 'Who is free'],
+      ...recs.slice(0, 15).map((r, i) => {
+        const free = members
+          .filter(m => (m.availability?.[r.day] || []).includes(r.startSlot))
+          .map(m => m.name).join(', ');
+        return [
+          i + 1,
+          DAYS[r.day],
+          slotRangeLabel(r.startSlot, r.endSlot),
+          `${r.count}/${r.total} (${Math.round(r.count / r.total * 100)}%)`,
+          free,
+        ];
+      }),
+    ];
+
+    // ── 3. Write all values ───────────────────────────────
+    await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sid}/values:batchUpdate`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        valueInputOption: 'RAW',
+        data: [
+          { range: 'Individual!A1',  values: indivRows },
+          { range: 'Heatmap!A1',     values: heatRows  },
+          { range: "'Best Times'!A1", values: bestRows  },
+        ],
+      }),
+    });
+
+    // ── 4. Format all sheets ──────────────────────────────
+    const fmtReqs = [];
+    const boldWhite  = { bold: true, foregroundColor: WHITE };
+    const italGrey   = { italic: true, foregroundColor: { red:0.75,green:0.75,blue:0.75 } };
+
+    // ---- Individual sheet ----
+    const IND = 10, HEAT = 20, BEST = 30;
+    const indivCols = 9;
+    // Title row
+    fmtReqs.push(sheetMergeReq(IND, 0, 0, 1, indivCols));
+    fmtReqs.push(sheetFmtReq(IND, 0, 0, 1, indivCols, {
+      backgroundColor: DARK,
+      textFormat: { ...boldWhite, fontSize: 13 },
+      verticalAlignment: 'MIDDLE', horizontalAlignment: 'LEFT',
+    }));
+    // Subtitle
+    fmtReqs.push(sheetMergeReq(IND, 1, 0, 2, indivCols));
+    fmtReqs.push(sheetFmtReq(IND, 1, 0, 2, indivCols, {
+      backgroundColor: DARK2, textFormat: italGrey,
+    }));
+    // Header row (row index 3)
+    fmtReqs.push(sheetFmtReq(IND, 3, 0, 4, indivCols, {
+      backgroundColor: AMBER, textFormat: boldWhite,
+      horizontalAlignment: 'CENTER',
+    }));
+    // Data rows alternating
+    members.forEach((_, i) => {
+      fmtReqs.push(sheetFmtReq(IND, 4+i, 0, 5+i, indivCols, {
+        backgroundColor: i%2===0 ? PALE : WHITE,
+        wrapStrategy: 'WRAP',
+      }));
+    });
+    // Freeze header, set col widths
+    fmtReqs.push(sheetFreezeReq(IND, 4, 1));
+    fmtReqs.push(sheetColWidthReq(IND, 0, 150)); // Name
+    fmtReqs.push(sheetColWidthReq(IND, 1, 200)); // Email
+    for (let c = 2; c < 9; c++) fmtReqs.push(sheetColWidthReq(IND, c, 190)); // Days
+
+    // ---- Heatmap sheet ----
+    const heatCols = 8;
+    fmtReqs.push(sheetMergeReq(HEAT, 0, 0, 1, heatCols));
+    fmtReqs.push(sheetFmtReq(HEAT, 0, 0, 1, heatCols, {
+      backgroundColor: DARK, textFormat: { ...boldWhite, fontSize: 13 },
+      horizontalAlignment: 'LEFT',
+    }));
+    fmtReqs.push(sheetMergeReq(HEAT, 1, 0, 2, heatCols));
+    fmtReqs.push(sheetFmtReq(HEAT, 1, 0, 2, heatCols, {
+      backgroundColor: DARK2, textFormat: italGrey,
+    }));
+    fmtReqs.push(sheetFmtReq(HEAT, 3, 0, 4, heatCols, {
+      backgroundColor: AMBER, textFormat: boldWhite,
+      horizontalAlignment: 'CENTER',
+    }));
+    // Time label column
+    fmtReqs.push(sheetFmtReq(HEAT, 4, 0, 4+TOTAL_SLOTS, 1, {
+      textFormat: { bold: true }, horizontalAlignment: 'RIGHT',
+    }));
+    // Color cells by intensity
+    for (let s = 0; s < TOTAL_SLOTS; s++) {
+      for (let d = 0; d < 7; d++) {
+        const count = matrix[d][s];
+        if (count === 0) continue;
+        fmtReqs.push(sheetFmtReq(HEAT, 4+s, 1+d, 5+s, 2+d, {
+          backgroundColor: heatRgb(count/total),
+          horizontalAlignment: 'CENTER',
+          textFormat: { bold: count === total },
+        }));
       }
-    );
+    }
+    fmtReqs.push(sheetFreezeReq(HEAT, 4, 1));
+    fmtReqs.push(sheetColWidthReq(HEAT, 0, 95));
+    for (let c = 1; c < 8; c++) fmtReqs.push(sheetColWidthReq(HEAT, c, 72));
 
-    window.open(`https://docs.google.com/spreadsheets/d/${sheet.spreadsheetId}`, '_blank');
-    showToast('Spreadsheet opened in new tab!', 'success');
+    // ---- Best Times sheet ----
+    fmtReqs.push(sheetMergeReq(BEST, 0, 0, 1, 5));
+    fmtReqs.push(sheetFmtReq(BEST, 0, 0, 1, 5, {
+      backgroundColor: DARK, textFormat: { ...boldWhite, fontSize: 13 },
+    }));
+    fmtReqs.push(sheetMergeReq(BEST, 1, 0, 2, 5));
+    fmtReqs.push(sheetFmtReq(BEST, 1, 0, 2, 5, {
+      backgroundColor: DARK2, textFormat: italGrey,
+    }));
+    fmtReqs.push(sheetFmtReq(BEST, 3, 0, 4, 5, {
+      backgroundColor: AMBER, textFormat: boldWhite,
+      horizontalAlignment: 'CENTER',
+    }));
+    recs.slice(0, 15).forEach((r, i) => {
+      const rowBg = r.allAvailable
+        ? { red:0.18,green:0.96,blue:0.53 }
+        : i%2===0 ? PALE : WHITE;
+      fmtReqs.push(sheetFmtReq(BEST, 4+i, 0, 5+i, 5, { backgroundColor: rowBg }));
+    });
+    fmtReqs.push(sheetFreezeReq(BEST, 4, 0));
+    fmtReqs.push(sheetColWidthReq(BEST, 0, 55));
+    fmtReqs.push(sheetColWidthReq(BEST, 1, 110));
+    fmtReqs.push(sheetColWidthReq(BEST, 2, 150));
+    fmtReqs.push(sheetColWidthReq(BEST, 3, 120));
+    fmtReqs.push(sheetColWidthReq(BEST, 4, 300));
+
+    // Send all format requests
+    await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sid}:batchUpdate`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requests: fmtReqs }),
+    });
+
+    window.open(`https://docs.google.com/spreadsheets/d/${sid}`, '_blank');
+    showToast('Spreadsheet ready! Opening now.', 'success');
   } catch (e) {
     showToast(`Export failed: ${e.message}`, 'error');
   }
