@@ -12,5 +12,5 @@ window.CLAIRE_CONFIG = {
 
   // 3. Your Google OAuth Client ID (from Google Cloud Console — see SETUP.md)
   //    Leave empty if you don't want Google Calendar / Sheets integration
-  googleClientId: 'YOUR_GOOGLE_CLIENT_ID',
+  googleClientId: 'Y787724250903-lubk1b1rbg903u8rn8qciigc1f2u27sf.apps.googleusercontent.com',
 };
