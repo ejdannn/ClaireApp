@@ -184,6 +184,68 @@ function clearAdminSession() {
   sessionStorage.removeItem('claire_code');
 }
 
+// ── Timezone helpers ─────────────────────────────────────
+const TIMEZONES = [
+  { value: 'America/New_York',    label: 'Eastern Time (ET)' },
+  { value: 'America/Chicago',     label: 'Central Time (CT)' },
+  { value: 'America/Denver',      label: 'Mountain Time (MT)' },
+  { value: 'America/Los_Angeles', label: 'Pacific Time (PT)' },
+  { value: 'America/Anchorage',   label: 'Alaska (AKT)' },
+  { value: 'Pacific/Honolulu',    label: 'Hawaii (HT)' },
+  { value: 'America/Puerto_Rico', label: 'Puerto Rico (AST)' },
+  { value: 'Europe/London',       label: 'London (GMT/BST)' },
+  { value: 'Europe/Paris',        label: 'Paris (CET)' },
+  { value: 'Europe/Berlin',       label: 'Berlin (CET)' },
+  { value: 'Asia/Dubai',          label: 'Dubai (GST)' },
+  { value: 'Asia/Kolkata',        label: 'India (IST)' },
+  { value: 'Asia/Shanghai',       label: 'Shanghai (CST)' },
+  { value: 'Asia/Tokyo',          label: 'Tokyo (JST)' },
+  { value: 'Asia/Seoul',          label: 'Seoul (KST)' },
+  { value: 'Australia/Sydney',    label: 'Sydney (AEST)' },
+  { value: 'UTC',                 label: 'UTC' },
+];
+
+function getBrowserTimezone() {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/New_York';
+}
+
+// Returns UTC offset in minutes for a given IANA timezone (positive = ahead of UTC)
+function getTzOffsetMinutes(tz) {
+  const now = new Date();
+  const a = new Date(now.toLocaleString('en-US', { timeZone: 'UTC' }));
+  const b = new Date(now.toLocaleString('en-US', { timeZone: tz }));
+  return (b - a) / 60000;
+}
+
+// Convert a slot from one timezone to another. Returns -1 if outside display range.
+function convertSlot(slot, fromTz, toTz) {
+  if (!fromTz || !toTz || fromTz === toTz) return slot;
+  const diff = Math.round((getTzOffsetMinutes(toTz) - getTzOffsetMinutes(fromTz)) / 30);
+  const n = slot + diff;
+  return (n >= 0 && n < TOTAL_SLOTS) ? n : -1;
+}
+
+// Convert a full availability object to a target timezone
+function convertAvailability(avail, fromTz, toTz) {
+  if (!fromTz || !toTz || fromTz === toTz) return avail;
+  const result = {};
+  for (let d = 0; d < 7; d++) {
+    result[d] = [];
+    for (const s of (avail[d] || [])) {
+      const ns = convertSlot(s, fromTz, toTz);
+      if (ns !== -1) result[d].push(ns);
+    }
+  }
+  return result;
+}
+
+// Build <option> tags for a timezone <select>
+function buildTimezoneOptions(selected) {
+  return TIMEZONES.map(tz =>
+    `<option value="${tz.value}"${tz.value === selected ? ' selected' : ''}>${tz.label}</option>`
+  ).join('');
+}
+
 // ── Google auth helpers ──────────────────────────────────
 function saveGoogleToken(token, expiresIn) {
   localStorage.setItem('claire_gauth', JSON.stringify({

@@ -19,12 +19,16 @@
   <header class="admin-header">
     <div class="admin-header-inner">
       <div class="admin-brand">
-        <span class="admin-brand-icon">☀️</span>
+        <span class="admin-brand-icon icon-emoji">☀️</span>
         Claire Admin
       </div>
       <div class="admin-header-actions">
+        <div class="tz-picker">
+          <span style="font-size:0.75rem; color:var(--text-muted); white-space:nowrap;"><span class="icon-emoji">🌍</span> View in:</span>
+          <select id="adminTzSelect" class="tz-select"><!-- populated by JS --></select>
+        </div>
         <div id="googleStatusBar" class="google-connect-bar" style="padding:0.5rem 0.75rem; margin-bottom:0;">
-          <span class="google-icon">🗓</span>
+          <span class="google-icon icon-emoji">🗓</span>
           <span class="status-text" id="googleStatusText">
             <span class="google-disconnected">Not connected to Google</span>
           </span>
@@ -222,6 +226,22 @@
         </div>
       </div>
 
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem;">
+        <div class="form-group">
+          <label for="meetingRecurrence">Repeat</label>
+          <select id="meetingRecurrence" onchange="document.getElementById('untilDateGroup').style.display=this.value?'block':'none'">
+            <option value="">Does not repeat</option>
+            <option value="WEEKLY">Every week</option>
+            <option value="BIWEEKLY">Every 2 weeks</option>
+            <option value="MONTHLY">Every month</option>
+          </select>
+        </div>
+        <div class="form-group" id="untilDateGroup" style="display:none;">
+          <label for="meetingUntil">End Date (optional)</label>
+          <input type="date" id="meetingUntil" />
+        </div>
+      </div>
+
       <div class="form-group">
         <label for="meetingNotes">Notes / Description (optional)</label>
         <textarea id="meetingNotes" placeholder="Agenda, what to bring, etc." rows="2"></textarea>
@@ -235,7 +255,7 @@
 
       <!-- Google not connected warning -->
       <div id="googleWarning" class="google-connect-bar hidden" style="margin-top:0.75rem;">
-        <span class="google-icon">🗓</span>
+        <span class="google-icon icon-emoji">🗓</span>
         <span class="status-text google-disconnected">Connect Google Calendar to send invites automatically.</span>
         <button class="btn btn-sm btn-secondary" id="scheduleConnectGoogle">Connect</button>
       </div>

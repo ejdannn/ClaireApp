@@ -4,6 +4,24 @@
 
 let db, currentGroup, groupMembers = [], googleTokenClient;
 
+// ── Admin timezone ────────────────────────────────────────
+function getAdminTimezone() {
+  return localStorage.getItem('claire_admin_tz') || getBrowserTimezone();
+}
+function setAdminTimezone(tz) {
+  localStorage.setItem('claire_admin_tz', tz);
+}
+
+// Returns groupMembers with availability converted to admin's viewing timezone
+function getMembersInAdminTz() {
+  const adminTz = getAdminTimezone();
+  return groupMembers.map(m => {
+    const memberTz = m.availability?.tz;
+    if (!memberTz || memberTz === adminTz) return m;
+    return { ...m, availability: convertAvailability(m.availability, memberTz, adminTz) };
+  });
+}
+
 // ── Init ─────────────────────────────────────────────────
 (async function init() {
   // Guard: must be admin
@@ -164,9 +182,10 @@ function renderHeatmap() {
   if (!groupMembers.length) { grid.innerHTML = ''; show('heatmapEmpty'); return; }
   hide('heatmapEmpty');
 
-  const total  = groupMembers.length;
+  const tzMembers = getMembersInAdminTz();
+  const total  = tzMembers.length;
   const matrix = Array.from({ length: 7 }, () => new Array(TOTAL_SLOTS).fill(0));
-  for (const m of groupMembers) {
+  for (const m of tzMembers) {
     const avail = m.availability || {};
     for (let d = 0; d < 7; d++) {
       for (const s of (avail[d] || [])) { if (s < TOTAL_SLOTS) matrix[d][s]++; }
@@ -205,7 +224,7 @@ function renderRecommended() {
 
   if (!groupMembers.length) { container.innerHTML = ''; show('recEmpty'); return; }
 
-  const recs = getRecommendedTimes(groupMembers);
+  const recs = getRecommendedTimes(getMembersInAdminTz());
   if (!recs.length) { container.innerHTML = ''; show('recEmpty'); return; }
   hide('recEmpty');
 
@@ -223,6 +242,17 @@ function renderRecommended() {
 
 // ── Create group ──────────────────────────────────────────
 function bindUI() {
+  // Timezone selector
+  const tzSel = document.getElementById('adminTzSelect');
+  if (tzSel) {
+    tzSel.innerHTML = buildTimezoneOptions(getAdminTimezone());
+    tzSel.addEventListener('change', () => {
+      setAdminTimezone(tzSel.value);
+      const activeTab = document.querySelector('.tab-btn.active')?.dataset.tab;
+      if (activeTab) switchTab(activeTab);
+    });
+  }
+
   document.getElementById('createGroupBtn').addEventListener('click', () => {
     show('createGroupModal');
     document.getElementById('newGroupName').focus();
@@ -291,8 +321,12 @@ async function confirmDeleteGroup(groupId, groupName) {
 let selectedRec = null, selectedDate = null, selectedStartTime = null;
 
 function openScheduleModal() {
-  // Compute recs from current members
-  const recs = getRecommendedTimes(groupMembers);
+  // Reset recurrence UI
+  const recSel = document.getElementById('meetingRecurrence');
+  if (recSel) { recSel.value = ''; document.getElementById('untilDateGroup').style.display = 'none'; }
+
+  // Compute recs from timezone-converted members
+  const recs = getRecommendedTimes(getMembersInAdminTz());
   selectedRec = recs[0] || null;
 
   // Build recommended time options
@@ -415,6 +449,16 @@ document.getElementById('confirmSchedule').addEventListener('click', async () =>
     attendees,
     reminders: { useDefault: true },
   };
+
+  // Add recurrence rule if selected
+  const recurrence = document.getElementById('meetingRecurrence')?.value;
+  const untilDate  = document.getElementById('meetingUntil')?.value;
+  if (recurrence) {
+    let freq = recurrence === 'BIWEEKLY' ? 'WEEKLY;INTERVAL=2' : recurrence;
+    let rrule = `RRULE:FREQ=${freq}`;
+    if (untilDate) rrule += `;UNTIL=${untilDate.replace(/-/g,'')}T235959Z`;
+    event.recurrence = [rrule];
+  }
 
   try {
     const res = await fetch(

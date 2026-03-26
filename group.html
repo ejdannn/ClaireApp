@@ -41,11 +41,11 @@
     <!-- Step 1: Name + Email -->
     <div class="step-panel active" id="step1Panel">
       <div class="info-card">
-        <h2>👋 Who are you?</h2>
+        <h2><span class="icon-emoji">👋</span> Who are you?</h2>
         <p class="subtitle">Enter your name and email so Claire can match your availability to you. If you've submitted before, your previous availability will load automatically.</p>
 
         <div id="returningNotice" class="returning-notice hidden">
-          ✏️ Welcome back! Your previous availability has been loaded — update it however you like.
+          <span class="icon-emoji">✏️</span> Welcome back! Your previous availability has been loaded — update it however you like.
         </div>
 
         <div class="form-group">
@@ -55,6 +55,10 @@
         <div class="form-group">
           <label for="memberEmail">Your Email <span style="color:var(--danger)">*</span></label>
           <input type="email" id="memberEmail" placeholder="you@example.com" autocomplete="email" />
+        </div>
+        <div class="form-group">
+          <label for="memberTimezone">Your Timezone</label>
+          <select id="memberTimezone"><!-- populated by JS --></select>
         </div>
 
         <div id="step1Error" class="error-msg hidden"></div>
@@ -71,7 +75,7 @@
       <div class="avail-grid-wrapper">
         <div class="avail-grid-header">
           <div>
-            <h2>🗓 Your Weekly Availability</h2>
+            <h2><span class="icon-emoji">🗓</span> Your Weekly Availability</h2>
             <p class="text-muted text-sm" style="margin-top:0.2rem;">
               Tap the times you're <strong>generally free</strong> each week — not a specific date.
             </p>
@@ -127,15 +131,12 @@
     <!-- Done state -->
     <div class="step-panel" id="donePanelWrap" style="display:none;">
       <div class="info-card" style="text-align:center; padding:3rem 2rem;">
-        <div style="font-size:4rem; margin-bottom:1rem;">🎉</div>
+        <div style="font-size:4rem; margin-bottom:1rem;"><span class="icon-emoji">🎉</span></div>
         <h2>Thank you!</h2>
-        <p class="subtitle" style="max-width:340px; margin:0 auto 0.75rem;">
-          Your availability has been saved — Claire will use it to find the best time for everyone.
+        <p class="subtitle" style="max-width:380px; margin:0 auto 1.75rem;">
+          Your availability has been saved. Claire will use it to find the best time for everyone. Need to make changes? No problem, just click the button below to come back and update your availability anytime.
         </p>
-        <p style="font-size:0.875rem; color:var(--text-muted); max-width:320px; margin:0 auto 1.75rem;">
-          Need to make changes? No problem — just click the button below to come back and update your availability anytime.
-        </p>
-        <button class="btn btn-secondary" id="editAgainBtn">✏️ Edit My Availability</button>
+        <button class="btn btn-secondary" id="editAgainBtn"><span class="icon-emoji">✏️</span> Edit My Availability</button>
       </div>
     </div>
 

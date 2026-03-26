@@ -12,6 +12,14 @@ let activeMobileDay = 0;
 let isDragging = false;
 let dragAction  = 'add'; // 'add' | 'remove'
 
+// ── Timezone selector ─────────────────────────────────────
+(function initTzSelect() {
+  const sel = document.getElementById('memberTimezone');
+  if (!sel) return;
+  const browser = getBrowserTimezone();
+  sel.innerHTML = buildTimezoneOptions(browser);
+})();
+
 // ── Init ─────────────────────────────────────────────────
 (async function init() {
   try { db = getSupabase(); } catch (e) {
@@ -93,6 +101,11 @@ async function checkExistingMember() {
     const avail = data.availability || {};
     for (let d = 0; d < 7; d++) {
       availability[d] = new Set(avail[d] || []);
+    }
+    // Pre-fill timezone if stored
+    if (avail.tz) {
+      const tzSel = document.getElementById('memberTimezone');
+      if (tzSel) tzSel.value = avail.tz;
     }
     show('returningNotice');
   } else {
@@ -287,6 +300,8 @@ async function submitAvailability() {
   for (let d = 0; d < 7; d++) {
     avail[d] = [...availability[d]].sort((a, b) => a - b);
   }
+  // Store member's timezone so admin can convert correctly
+  avail.tz = document.getElementById('memberTimezone')?.value || getBrowserTimezone();
 
   setSubmitLoading(true);
 
