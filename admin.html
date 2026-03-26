@@ -55,7 +55,7 @@
       <div id="groupsGrid" class="groups-grid hidden"></div>
 
       <div id="groupsEmpty" class="empty-state hidden">
-        <div class="empty-icon">🗂️</div>
+        <div class="empty-icon">📋</div>
         <h3>No groups yet</h3>
         <p>Create your first group to get a shareable link you can send to friends, teammates, or anyone you need to schedule with.</p>
         <button class="btn btn-primary" onclick="document.getElementById('createGroupBtn').click()">Create Your First Group</button>
@@ -76,16 +76,16 @@
             </div>
           </div>
           <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
-            <button class="btn btn-sm btn-ghost" id="detailExportBtn">📊 Export to Sheets</button>
-            <button class="btn btn-sm btn-primary" id="detailScheduleBtn">📅 Schedule Meeting</button>
+            <button class="btn btn-sm btn-ghost" id="detailExportBtn"><span class="icon-emoji">📊</span> Export to Sheets</button>
+            <button class="btn btn-sm btn-primary" id="detailScheduleBtn"><span class="icon-emoji">📅</span> Schedule Meeting</button>
           </div>
         </div>
 
         <div class="group-detail-body">
           <div class="tabs">
-            <button class="tab-btn active" data-tab="members">👥 Members</button>
-            <button class="tab-btn" data-tab="availability">🗓 Availability Overlay</button>
-            <button class="tab-btn" data-tab="recommend">✨ Best Times</button>
+            <button class="tab-btn active" data-tab="members"><span class="icon-emoji">👥</span> Members</button>
+            <button class="tab-btn" data-tab="availability"><span class="icon-emoji">🗓</span> Availability Overlay</button>
+            <button class="tab-btn" data-tab="recommend"><span class="icon-emoji">✨</span> Best Times</button>
           </div>
 
           <!-- Members tab -->
@@ -168,7 +168,7 @@
 <div id="scheduleModal" class="modal-backdrop hidden">
   <div class="modal">
     <div class="modal-header">
-      <h3>📅 Schedule a Meeting</h3>
+      <h3><span class="icon-emoji">📅</span> Schedule a Meeting</h3>
       <button class="btn-icon" id="closeScheduleModal">✕</button>
     </div>
     <div class="modal-body">
@@ -245,7 +245,7 @@
     <div class="modal-footer">
       <button class="btn btn-ghost" id="cancelSchedule">Cancel</button>
       <button class="btn btn-primary" id="confirmSchedule">
-        <span id="scheduleButtonText">Create &amp; Send Invite 🗓</span>
+        <span id="scheduleButtonText">Create &amp; Send Invite <span class="icon-emoji">🗓</span></span>
         <span id="scheduleSpinner" class="spinner hidden"></span>
       </button>
     </div>

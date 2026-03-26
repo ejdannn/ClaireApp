@@ -472,7 +472,14 @@ label {
 }
 .empty-state .empty-icon {
   font-size: 3.5rem; margin-bottom: 1rem;
-  filter: grayscale(1) brightness(0) opacity(0.15);
+}
+
+/* Warm orange/amber silhouette — all icon emojis */
+.icon-emoji,
+.empty-state .empty-icon,
+.google-icon {
+  display: inline-block;
+  filter: brightness(0) invert(65%) sepia(100%) saturate(600%) hue-rotate(350deg) opacity(0.85);
 }
 .empty-state h3 { color: var(--text); margin-bottom: 0.5rem; }
 .empty-state p { max-width: 360px; margin: 0 auto 1.5rem; font-size: 0.9375rem; }
