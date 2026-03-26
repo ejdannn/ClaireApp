@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────
-//  CLAIRE — Landing page logic (index.html)
+//  CLAIRE : Landing page logic (index.html)
 // ─────────────────────────────────────────────────────────
 
 const adminCodeInput = document.getElementById('adminCode');
@@ -68,7 +68,7 @@ function goToGroup() {
     const idParam = url.searchParams.get('id');
     if (idParam) slug = idParam;
   } catch {
-    // Not a URL — treat raw value as the slug
+    // Not a URL : treat raw value as the slug
   }
 
   if (!slug) { showError(groupError, 'Could not read that link. Try pasting just the code.'); return; }

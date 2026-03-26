@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────
-//  CLAIRE UTILS — Shared constants and helpers
+//  CLAIRE UTILS : Shared constants and helpers
 // ─────────────────────────────────────────────────────────
 
 const DAYS       = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];

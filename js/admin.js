@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────
-//  CLAIRE — Admin dashboard (admin.html)
+//  CLAIRE : Admin dashboard (admin.html)
 // ─────────────────────────────────────────────────────────
 
 let db, currentGroup, groupMembers = [], googleTokenClient;
@@ -337,7 +337,7 @@ function openScheduleModal() {
         data-rec-idx="${i}" onclick="selectRecTime(this, ${i})">
         <div class="time-option-badge">${i + 1}</div>
         <div>
-          <div style="font-weight:600;">${DAYS[r.day]} — ${slotRangeLabel(r.startSlot, r.endSlot)}</div>
+          <div style="font-weight:600;">${DAYS[r.day]} : ${slotRangeLabel(r.startSlot, r.endSlot)}</div>
           <div style="font-size:0.8rem;color:var(--text-muted);">
             ${r.allAvailable ? '🎉 Everyone available' : `${r.count}/${r.total} available`}
           </div>
@@ -347,7 +347,7 @@ function openScheduleModal() {
     // Set date/time from first rec
     if (selectedRec) prefillDateTimeFromRec(selectedRec);
   } else {
-    optionsEl.innerHTML = '<p class="text-muted text-sm">No recommended times yet — you can still pick a custom time below.</p>';
+    optionsEl.innerHTML = '<p class="text-muted text-sm">No recommended times yet : you can still pick a custom time below.</p>';
   }
 
   // Build attendee checklist
@@ -569,7 +569,7 @@ async function exportToSheets() {
     const createRes = await fetch('https://sheets.googleapis.com/v4/spreadsheets', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ properties: { title: `${currentGroup.name} — Availability` } }),
+      body: JSON.stringify({ properties: { title: `${currentGroup.name} : Availability` } }),
     });
     const sheet = await createRes.json();
     if (!createRes.ok) throw new Error(sheet.error?.message || 'Failed to create sheet.');

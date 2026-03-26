@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────
-//  CLAIRE — Group availability form (group.html)
+//  CLAIRE : Group availability form (group.html)
 // ─────────────────────────────────────────────────────────
 
 let db, groupData, existingMember;
@@ -55,7 +55,7 @@ async function loadGroup(slug) {
   groupData = data;
   document.getElementById('groupNameDisplay').textContent = data.name;
   document.getElementById('groupDescDisplay').textContent = data.description || 'Fill in your general weekly availability below.';
-  document.title = `${data.name} — Claire`;
+  document.title = `${data.name} : Claire`;
   show('groupHeaderContent');
   document.getElementById('groupBody').style.display = '';
 
