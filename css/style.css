@@ -459,7 +459,19 @@ label {
   color: var(--text);
 }
 .group-card-meta {
-  font-size: 0.8125rem; color: var(--text-muted); margin-bottom: 1rem;
+  font-size: 0.8125rem; color: var(--text-muted); margin-bottom: 0.6rem;
+}
+.group-card-progress {
+  display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.85rem;
+}
+.group-card-progress-bar {
+  flex: 1; height: 6px; background: var(--border); border-radius: 99px; overflow: hidden;
+}
+.group-card-progress-fill {
+  height: 100%; border-radius: 99px; transition: width 0.4s ease;
+}
+.group-card-progress-label {
+  font-size: 0.75rem; color: var(--text-muted); white-space: nowrap;
 }
 .group-card-actions {
   display: flex; gap: 0.5rem; flex-wrap: wrap;
@@ -754,7 +766,57 @@ label {
   text-align: center;
   font-size: 0.75rem; font-weight: 700;
   padding: 0.4rem; color: var(--text);
+  position: relative;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
 }
+.copy-day-btn {
+  font-size: 0.65rem; line-height: 1;
+  background: none; border: 1px solid var(--border);
+  border-radius: 4px; padding: 1px 4px;
+  color: var(--text-muted); cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.copy-day-btn:hover { background: var(--primary-pale); color: var(--primary-dark); border-color: var(--primary-light); }
+
+/* Desktop copy-from popover */
+.copy-day-popover {
+  position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; box-shadow: var(--shadow-lg);
+  padding: 0.6rem 0.75rem; z-index: 200; min-width: 140px;
+  text-align: left;
+}
+.copy-day-popover-label {
+  font-size: 0.7rem; color: var(--text-muted); font-weight: 600;
+  margin-bottom: 0.4rem; text-transform: uppercase; letter-spacing: 0.04em;
+}
+.copy-day-popover-days {
+  display: flex; flex-wrap: wrap; gap: 0.3rem;
+}
+.copy-day-option {
+  font-size: 0.75rem; font-weight: 600;
+  padding: 0.25rem 0.5rem; border-radius: 6px;
+  border: 1px solid var(--border); background: var(--surface2);
+  color: var(--text); cursor: pointer; transition: background 0.15s;
+}
+.copy-day-option:hover { background: var(--primary-pale); border-color: var(--primary-light); color: var(--primary-dark); }
+
+/* Mobile copy-from row */
+.mobile-copy-row {
+  display: flex; align-items: center; gap: 0.35rem;
+  padding: 0.5rem 0; flex-wrap: wrap;
+}
+.mobile-copy-label {
+  font-size: 0.75rem; color: var(--text-muted); font-weight: 600; margin-right: 0.1rem;
+}
+.mobile-copy-day-btn {
+  font-size: 0.72rem; font-weight: 600;
+  padding: 0.25rem 0.5rem; border-radius: 6px;
+  border: 1px solid var(--border); background: var(--surface2);
+  color: var(--text); cursor: pointer; transition: background 0.15s;
+}
+.mobile-copy-day-btn:hover { background: var(--primary-pale); border-color: var(--primary-light); color: var(--primary-dark); }
+.mobile-copy-day-btn.is-active-day { opacity: 0.3; pointer-events: none; }
 .avail-grid-time {
   font-size: 0.65rem; color: var(--text-light);
   text-align: right; padding-right: 6px;

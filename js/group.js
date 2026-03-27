@@ -196,9 +196,12 @@ function buildDesktopGrid() {
 
   // Empty top-left corner
   html += '<div></div>';
-  // Day headers
-  for (const d of DAYS_SHORT) {
-    html += `<div class="avail-grid-day-label">${d}</div>`;
+  // Day headers with copy button
+  for (let d = 0; d < DAYS_SHORT.length; d++) {
+    html += `<div class="avail-grid-day-label">
+      ${DAYS_SHORT[d]}
+      <button class="copy-day-btn" data-day="${d}" title="Copy from another day" tabindex="-1">⊕</button>
+    </div>`;
   }
 
   // Rows (time slots)
@@ -213,6 +216,14 @@ function buildDesktopGrid() {
   }
 
   grid.innerHTML = html;
+
+  // Copy-day buttons
+  grid.querySelectorAll('.copy-day-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      openCopyPopover(btn, +btn.dataset.day);
+    });
+  });
 
   // Drag-to-select
   grid.addEventListener('mousedown', e => {
@@ -281,9 +292,11 @@ function buildMobileGrid() {
       btn.classList.add('active');
       activeMobileDay = +btn.dataset.day;
       refreshMobileSlots();
+      highlightMobileCopyActive();
     });
   });
 
+  buildMobileCopyRow();
   refreshMobileSlots();
 }
 
@@ -313,6 +326,71 @@ function toggleSlot(day, slot) {
   } else {
     availability[day].delete(slot);
   }
+}
+
+// ── Copy day ──────────────────────────────────────────────
+let activeCopyPopover = null;
+
+function openCopyPopover(anchorBtn, targetDay) {
+  closeCopyPopover();
+
+  const popover = document.createElement('div');
+  popover.className = 'copy-day-popover';
+  popover.innerHTML = `
+    <div class="copy-day-popover-label">Copy from:</div>
+    <div class="copy-day-popover-days">
+      ${DAYS_SHORT.map((d, i) => i === targetDay ? '' :
+        `<button class="copy-day-option" data-from="${i}">${d}</button>`
+      ).join('')}
+    </div>`;
+
+  popover.querySelectorAll('.copy-day-option').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const fromDay = +btn.dataset.from;
+      availability[targetDay] = new Set(availability[fromDay]);
+      refreshDesktopGrid();
+      refreshMobileSlots();
+      closeCopyPopover();
+    });
+  });
+
+  anchorBtn.parentElement.style.position = 'relative';
+  anchorBtn.parentElement.appendChild(popover);
+  activeCopyPopover = popover;
+
+  // Close when clicking outside
+  setTimeout(() => document.addEventListener('click', closeCopyPopover, { once: true }), 0);
+}
+
+function closeCopyPopover() {
+  if (activeCopyPopover) { activeCopyPopover.remove(); activeCopyPopover = null; }
+}
+
+// Mobile: "Copy from" row shown below day tabs
+function buildMobileCopyRow() {
+  const wrap = document.getElementById('mobileCopyRow');
+  if (!wrap) return;
+  wrap.innerHTML = `
+    <span class="mobile-copy-label">Copy from:</span>
+    ${DAYS_SHORT.map((d, i) =>
+      `<button class="mobile-copy-day-btn" data-day="${i}">${d}</button>`
+    ).join('')}`;
+
+  wrap.querySelectorAll('.mobile-copy-day-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const fromDay = +btn.dataset.day;
+      if (fromDay === activeMobileDay) return;
+      availability[activeMobileDay] = new Set(availability[fromDay]);
+      refreshMobileSlots();
+      refreshDesktopGrid();
+    });
+  });
+}
+
+function highlightMobileCopyActive() {
+  document.querySelectorAll('.mobile-copy-day-btn').forEach(btn => {
+    btn.classList.toggle('is-active-day', +btn.dataset.day === activeMobileDay);
+  });
 }
 
 // ── Quick-select helpers ──────────────────────────────────

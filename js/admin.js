@@ -63,8 +63,22 @@ async function loadGroups() {
 function renderGroupCards(groups) {
   const grid = document.getElementById('groupsGrid');
   grid.innerHTML = groups.map(g => {
-    const count = g.members?.[0]?.count ?? 0;
-    const link  = groupLink(g.slug);
+    const count    = g.members?.[0]?.count ?? 0;
+    const expected = g.expected_members?.length || 0;
+    const link     = groupLink(g.slug);
+
+    // Progress bar (only shown when expected members are set)
+    const showBar = expected > 0;
+    const pct     = showBar ? Math.min(100, Math.round((count / expected) * 100)) : 0;
+    const barColor = pct === 100 ? 'var(--success)' : pct >= 50 ? 'var(--primary)' : 'var(--danger)';
+    const progressHtml = showBar ? `
+      <div class="group-card-progress">
+        <div class="group-card-progress-bar">
+          <div class="group-card-progress-fill" style="width:${pct}%;background:${barColor};"></div>
+        </div>
+        <span class="group-card-progress-label">${count} / ${expected} responded</span>
+      </div>` : '';
+
     return `
     <div class="group-card" data-group-id="${g.id}">
       <div class="group-card-name">${escHtml(g.name)}</div>
@@ -72,6 +86,7 @@ function renderGroupCards(groups) {
         <span class="badge badge-primary">${count} member${count !== 1 ? 's' : ''}</span>
         &nbsp; Created ${relativeTime(g.created_at)}
       </div>
+      ${progressHtml}
       <div class="group-card-actions">
         <button class="btn btn-primary btn-sm view-group-btn" data-group="${escHtml(JSON.stringify(g))}">View</button>
         <button class="btn btn-ghost btn-sm copy-link-btn" data-link="${link}">Copy Link</button>
