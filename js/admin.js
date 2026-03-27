@@ -437,7 +437,17 @@ function renderRecommended() {
     </div>`).join('');
 }
 
-// ── Create group ──────────────────────────────────────────
+// ── Main view switcher (Schedules / Contacts) ─────────────
+function switchMainView(view) {
+  const isSchedules = view === 'schedules';
+  document.getElementById('schedulesSection').classList.toggle('hidden', !isSchedules);
+  document.getElementById('contactsSection').classList.toggle('hidden', isSchedules);
+  document.getElementById('navSchedules').classList.toggle('active', isSchedules);
+  document.getElementById('navContacts').classList.toggle('active', !isSchedules);
+  if (!isSchedules) loadContactGroups();
+}
+
+// ── Create schedule ────────────────────────────────────────
 function bindUI() {
   // Timezone selector
   const tzSel = document.getElementById('adminTzSelect');
@@ -451,6 +461,7 @@ function bindUI() {
   }
 
   document.getElementById('createGroupBtn').addEventListener('click', () => {
+    loadContactsForPicker();
     show('createGroupModal');
     document.getElementById('newGroupName').focus();
   });
@@ -464,6 +475,13 @@ function bindUI() {
     clearAdminSession(); clearGoogleToken();
     window.location.href = '/';
   });
+
+  // Contact group modal
+  document.getElementById('createContactGroupBtn').addEventListener('click', () => openContactGroupModal());
+  document.getElementById('closeContactGroupModal').addEventListener('click', closeContactGroupModal);
+  document.getElementById('cancelContactGroup').addEventListener('click', closeContactGroupModal);
+  document.getElementById('confirmContactGroup').addEventListener('click', saveContactGroup);
+  document.getElementById('addContactMemberBtn').addEventListener('click', addContactMemberRow);
 }
 
 function closeCreateModal() {
@@ -1141,6 +1159,179 @@ async function exportToSheets() {
   } catch (e) {
     showToast(`Export failed: ${e.message}`, 'error');
   }
+}
+
+// ── Contacts ──────────────────────────────────────────────
+let contactGroups = [];
+let editingContactGroupId = null;
+
+async function loadContactGroups() {
+  show('contactGroupsLoading'); hide('contactGroupsGrid'); hide('contactGroupsEmpty');
+  try {
+    const res = await fetch(`/api/contacts?adminCode=${encodeURIComponent(getAdminCode())}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to load contacts.');
+    contactGroups = data || [];
+  } catch (e) {
+    showToast(e.message, 'error');
+    contactGroups = [];
+  }
+  hide('contactGroupsLoading');
+  renderContactGroupCards();
+}
+
+function renderContactGroupCards() {
+  const grid = document.getElementById('contactGroupsGrid');
+  if (!contactGroups.length) { show('contactGroupsEmpty'); hide('contactGroupsGrid'); return; }
+  hide('contactGroupsEmpty'); show('contactGroupsGrid');
+
+  grid.innerHTML = contactGroups.map(cg => {
+    const memberNames = (cg.members || []).map(m => escHtml(m.name)).join(', ') || '<span style="color:var(--text-muted)">No people yet</span>';
+    const count = (cg.members || []).length;
+    return `
+    <div class="group-card">
+      <div class="group-card-name">${escHtml(cg.name)}</div>
+      <div class="group-card-meta" style="margin-bottom:0.5rem;">
+        <span class="badge badge-primary">${count} person${count !== 1 ? 's' : ''}</span>
+      </div>
+      <div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:0.75rem;line-height:1.5;">${memberNames}</div>
+      <div class="group-card-actions">
+        <button class="btn btn-primary btn-sm" onclick="openContactGroupModal(${JSON.stringify(cg).replace(/"/g,'&quot;')})">Edit</button>
+        <button class="btn btn-ghost btn-sm" onclick="deleteContactGroup('${cg.id}','${escHtml(cg.name)}')">Delete</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function openContactGroupModal(group) {
+  editingContactGroupId = group?.id || null;
+  document.getElementById('contactGroupModalTitle').textContent = group ? 'Edit Contact Group' : 'New Contact Group';
+  document.getElementById('contactGroupName').value = group?.name || '';
+  document.getElementById('contactGroupError').classList.add('hidden');
+
+  const rows = document.getElementById('contactMemberRows');
+  rows.innerHTML = '';
+  const members = group?.members || [];
+  if (members.length) {
+    members.forEach(m => addContactMemberRow(m.name, m.email));
+  } else {
+    addContactMemberRow();
+  }
+  show('contactGroupModal');
+  document.getElementById('contactGroupName').focus();
+}
+
+function closeContactGroupModal() {
+  hide('contactGroupModal');
+  editingContactGroupId = null;
+}
+
+function addContactMemberRow(name = '', email = '') {
+  const rows = document.getElementById('contactMemberRows');
+  const row = document.createElement('div');
+  row.className = 'contact-member-row';
+  row.innerHTML = `
+    <input type="text" class="contact-member-name" placeholder="Name" value="${escHtml(name)}" />
+    <input type="email" class="contact-member-email" placeholder="Email (optional)" value="${escHtml(email)}" />
+    <button class="btn-icon contact-member-remove" title="Remove">✕</button>`;
+  row.querySelector('.contact-member-remove').addEventListener('click', () => row.remove());
+  rows.appendChild(row);
+}
+
+async function saveContactGroup() {
+  const name = document.getElementById('contactGroupName').value.trim();
+  const errEl = document.getElementById('contactGroupError');
+  errEl.classList.add('hidden');
+
+  if (!name) { errEl.textContent = 'Please enter a group name.'; errEl.classList.remove('hidden'); return; }
+
+  const members = [...document.querySelectorAll('.contact-member-row')].map(row => ({
+    name:  row.querySelector('.contact-member-name').value.trim(),
+    email: row.querySelector('.contact-member-email').value.trim(),
+  })).filter(m => m.name);
+
+  const btn = document.getElementById('confirmContactGroup');
+  btn.disabled = true; btn.textContent = 'Saving...';
+
+  try {
+    const method = editingContactGroupId ? 'PUT' : 'POST';
+    const body = { name, members, adminCode: getAdminCode() };
+    if (editingContactGroupId) body.id = editingContactGroupId;
+
+    const res = await fetch('/api/contacts', {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to save.');
+
+    closeContactGroupModal();
+    showToast(`"${name}" saved!`, 'success');
+    await loadContactGroups();
+  } catch (e) {
+    errEl.textContent = e.message; errEl.classList.remove('hidden');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Save Group';
+  }
+}
+
+async function deleteContactGroup(id, name) {
+  if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
+  const res = await fetch('/api/contacts', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id, adminCode: getAdminCode() }),
+  });
+  if (!res.ok) { showToast('Failed to delete.', 'error'); return; }
+  showToast(`"${name}" deleted.`, 'success');
+  await loadContactGroups();
+}
+
+// ── Contact picker (in Create Schedule modal) ─────────────
+async function loadContactsForPicker() {
+  const pickerEl = document.getElementById('contactPickerList');
+  pickerEl.innerHTML = '<p class="text-muted" style="font-size:0.8rem;">Loading contacts...</p>';
+  try {
+    const res = await fetch(`/api/contacts?adminCode=${encodeURIComponent(getAdminCode())}`);
+    const data = await res.json();
+    if (!res.ok || !data.length) {
+      pickerEl.innerHTML = '<p class="text-muted" style="font-size:0.8rem;">No contacts yet. Add some in the Contacts tab.</p>';
+      return;
+    }
+    pickerEl.innerHTML = data.map(cg => `
+      <div class="contact-picker-group">
+        <div class="contact-picker-group-name">${escHtml(cg.name)}</div>
+        ${(cg.members || []).map(m => `
+          <label class="contact-picker-item">
+            <input type="checkbox"
+              data-name="${escHtml(m.name)}"
+              data-email="${escHtml(m.email || '')}"
+              onchange="syncContactsToExpected()" />
+            <span class="contact-picker-name">${escHtml(m.name)}</span>
+            ${m.email ? `<span class="contact-picker-email">${escHtml(m.email)}</span>` : ''}
+          </label>`).join('')}
+      </div>`).join('');
+  } catch {
+    pickerEl.innerHTML = '<p class="text-muted" style="font-size:0.8rem;">Could not load contacts.</p>';
+  }
+}
+
+function syncContactsToExpected() {
+  const textarea = document.getElementById('newGroupExpected');
+  const allContactEntries = new Set(
+    [...document.querySelectorAll('#contactPickerList input[type="checkbox"]')]
+      .map(cb => cb.dataset.email || cb.dataset.name)
+  );
+  const checkedEntries = [...document.querySelectorAll('#contactPickerList input[type="checkbox"]:checked')]
+    .map(cb => cb.dataset.email || cb.dataset.name);
+
+  // Keep manually typed lines, replace contact lines
+  const manualLines = textarea.value.split('\n')
+    .map(s => s.trim())
+    .filter(s => s && !allContactEntries.has(s));
+
+  textarea.value = [...manualLines, ...checkedEntries].join('\n');
 }
 
 // ── DOM helpers ───────────────────────────────────────────

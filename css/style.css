@@ -1117,6 +1117,86 @@ label {
 .tz-select:focus { outline: none; border-color: var(--border-focus); }
 
 /* ─────────────────────────────────────────────
+   ADMIN MAIN NAV (Schedules / Contacts)
+   ───────────────────────────────────────────── */
+.admin-main-nav {
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: 1.5rem;
+  border-bottom: 2px solid var(--border);
+  padding-bottom: 0;
+}
+.admin-nav-btn {
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 0;
+  transition: color 0.15s, border-color 0.15s;
+}
+.admin-nav-btn:hover { color: var(--text); }
+.admin-nav-btn.active { color: var(--primary-dark); border-bottom-color: var(--primary); }
+
+/* ─────────────────────────────────────────────
+   CONTACTS
+   ───────────────────────────────────────────── */
+.contact-member-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.4rem;
+}
+.contact-member-row input {
+  flex: 1;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
+  font-family: inherit;
+  background: var(--surface);
+}
+.contact-member-row input:focus { outline: none; border-color: var(--border-focus); }
+.contact-member-remove {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.9rem;
+  padding: 0.2rem 0.3rem;
+  border-radius: 4px;
+}
+.contact-member-remove:hover { color: var(--danger); background: var(--danger-light); }
+
+/* Contact picker in Create Schedule modal */
+.contact-picker-group { margin-bottom: 0.75rem; }
+.contact-picker-group-name {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-bottom: 0.3rem;
+}
+.contact-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0.4rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+.contact-picker-item:hover { background: var(--primary-pale); }
+.contact-picker-name { font-weight: 500; }
+.contact-picker-email { color: var(--text-muted); font-size: 0.78rem; margin-left: auto; }
+
+/* ─────────────────────────────────────────────
    RESPONSIVE - MOBILE
    ───────────────────────────────────────────── */
 @media (max-width: 600px) {

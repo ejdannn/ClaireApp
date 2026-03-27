@@ -42,34 +42,43 @@
   <!-- Main body -->
   <main class="admin-body">
 
-    <!-- Groups list view -->
+    <!-- Top-level navigation: Schedules / Contacts -->
+    <nav class="admin-main-nav">
+      <button class="admin-nav-btn active" id="navSchedules" onclick="switchMainView('schedules')"><span class="icon-emoji">📅</span> Schedules</button>
+      <button class="admin-nav-btn" id="navContacts" onclick="switchMainView('contacts')"><span class="icon-emoji">👥</span> Contacts</button>
+    </nav>
+
+    <!-- Schedules section -->
+    <div id="schedulesSection">
+
+    <!-- Schedules list view -->
     <div id="groupsView">
       <div class="groups-header">
         <div>
-          <h2>Your Groups</h2>
-          <p class="text-muted text-sm" style="margin-top:0.25rem;">Create a group link and send it to the people you want to schedule with.</p>
+          <h2>Your Schedules</h2>
+          <p class="text-muted text-sm" style="margin-top:0.25rem;">Create a scheduling link and send it to the people you want to meet with.</p>
         </div>
-        <button class="btn btn-primary" id="createGroupBtn">+ New Group</button>
+        <button class="btn btn-primary" id="createGroupBtn">+ New Schedule</button>
       </div>
 
       <div id="groupsLoading" class="loading-state">
         <div class="spinner spinner-dark"></div>
-        <span>Loading your groups…</span>
+        <span>Loading your schedules…</span>
       </div>
 
       <div id="groupsGrid" class="groups-grid hidden"></div>
 
       <div id="groupsEmpty" class="empty-state hidden">
         <div class="empty-icon">📋</div>
-        <h3>No groups yet</h3>
-        <p>Create your first group to get a shareable link you can send to friends, teammates, or anyone you need to schedule with.</p>
-        <button class="btn btn-primary" onclick="document.getElementById('createGroupBtn').click()">Create Your First Group</button>
+        <h3>No schedules yet</h3>
+        <p>Create your first schedule to get a shareable link you can send to friends, teammates, or anyone you need to meet with.</p>
+        <button class="btn btn-primary" onclick="document.getElementById('createGroupBtn').click()">Create Your First Schedule</button>
       </div>
     </div>
 
-    <!-- Group detail view -->
+    <!-- Schedule detail view -->
     <div id="groupDetailView" class="hidden">
-      <button class="btn btn-ghost btn-sm" id="backToGroupsBtn" style="margin-bottom:1.25rem;">← Back to Groups</button>
+      <button class="btn btn-ghost btn-sm" id="backToGroupsBtn" style="margin-bottom:1.25rem;">← Back to Schedules</button>
 
       <div class="group-detail">
         <div class="group-detail-header">
@@ -154,14 +163,68 @@
       </div>
     </div>
 
+    </div> <!-- end #schedulesSection -->
+
+    <!-- Contacts section -->
+    <div id="contactsSection" class="hidden">
+      <div class="groups-header">
+        <div>
+          <h2>Your Contacts</h2>
+          <p class="text-muted text-sm" style="margin-top:0.25rem;">Save groups of people to quickly add them when creating a new schedule.</p>
+        </div>
+        <button class="btn btn-primary" id="createContactGroupBtn">+ New Contact Group</button>
+      </div>
+
+      <div id="contactGroupsLoading" class="loading-state">
+        <div class="spinner spinner-dark"></div>
+        <span>Loading contacts…</span>
+      </div>
+
+      <div id="contactGroupsGrid" class="groups-grid hidden"></div>
+
+      <div id="contactGroupsEmpty" class="empty-state hidden">
+        <div class="empty-icon">👥</div>
+        <h3>No contact groups yet</h3>
+        <p>Create a contact group to save a set of people you schedule with regularly. You can then pick from them when creating a new schedule.</p>
+        <button class="btn btn-primary" onclick="document.getElementById('createContactGroupBtn').click()">Create Your First Contact Group</button>
+      </div>
+    </div>
+
   </main>
 </div>
 
-<!-- ── Create Group Modal ── -->
+<!-- ── Create / Edit Contact Group Modal ── -->
+<div id="contactGroupModal" class="modal-backdrop hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="contactGroupModalTitle">New Contact Group</h3>
+      <button class="btn-icon" id="closeContactGroupModal">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label for="contactGroupName">Group Name <span style="color:var(--danger)">*</span></label>
+        <input type="text" id="contactGroupName" placeholder="e.g. Bow ADs, Book Club, Rehearsal Team…" maxlength="60" />
+      </div>
+      <div class="form-group" style="margin-bottom:0.5rem;">
+        <label>People</label>
+        <p class="text-muted" style="font-size:0.8rem;margin-bottom:0.6rem;">Add everyone in this contact group. Names are shown in Contacts; emails are used for nudges and expected member matching.</p>
+        <div id="contactMemberRows"></div>
+        <button class="btn btn-ghost btn-sm" id="addContactMemberBtn" style="margin-top:0.4rem;">+ Add Person</button>
+      </div>
+      <div id="contactGroupError" class="error-msg hidden"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="cancelContactGroup">Cancel</button>
+      <button class="btn btn-primary" id="confirmContactGroup">Save Group</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Create Schedule Modal ── -->
 <div id="createGroupModal" class="modal-backdrop hidden">
   <div class="modal">
     <div class="modal-header">
-      <h3>Create New Group</h3>
+      <h3>Create New Schedule</h3>
       <button class="btn-icon" id="closeCreateModal">✕</button>
     </div>
     <div class="modal-body">
@@ -186,11 +249,22 @@
           <input type="text" id="newGroupSlug" placeholder="e.g. book-club or team-standup" maxlength="40" style="flex:1;" />
         </div>
       </div>
+      <!-- Add from Contacts picker -->
+      <div class="form-group" style="margin-bottom:0;">
+        <details id="addFromContactsDetails">
+          <summary style="cursor:pointer;font-size:0.85rem;font-weight:600;color:var(--primary-dark);padding:0.4rem 0;">
+            <span class="icon-emoji">👥</span> Add from Contacts
+          </summary>
+          <div id="contactPickerList" style="margin-top:0.6rem;">
+            <p class="text-muted" style="font-size:0.8rem;">Loading contacts...</p>
+          </div>
+        </details>
+      </div>
       <div id="createGroupError" class="error-msg hidden"></div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" id="cancelCreateGroup">Cancel</button>
-      <button class="btn btn-primary" id="confirmCreateGroup">Create Group →</button>
+      <button class="btn btn-primary" id="confirmCreateGroup">Create Schedule →</button>
     </div>
   </div>
 </div>
