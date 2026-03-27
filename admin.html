@@ -61,6 +61,23 @@
         <button class="btn btn-primary" id="createGroupBtn">+ New Schedule</button>
       </div>
 
+      <!-- Filter / sort bar -->
+      <div class="schedules-toolbar" id="schedulesToolbar" style="display:none;">
+        <div class="filter-chips">
+          <button class="filter-chip active" data-filter="all">All</button>
+          <button class="filter-chip" data-filter="needs">Needs responses</button>
+          <button class="filter-chip" data-filter="ready">Ready to schedule</button>
+          <button class="filter-chip" data-filter="scheduled">Scheduled</button>
+        </div>
+        <select class="sort-select" id="scheduleSort">
+          <option value="newest">Newest first</option>
+          <option value="oldest">Oldest first</option>
+          <option value="az">Name A–Z</option>
+          <option value="pct_desc">Most complete</option>
+          <option value="pct_asc">Needs attention</option>
+        </select>
+      </div>
+
       <div id="groupsLoading" class="loading-state">
         <div class="spinner spinner-dark"></div>
         <span>Loading your schedules…</span>

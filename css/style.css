@@ -432,7 +432,35 @@ label {
 /* Groups grid */
 .groups-header {
   display: flex; align-items: center; justify-content: space-between;
-  margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;
+  margin-bottom: 1rem; flex-wrap: wrap; gap: 1rem;
+}
+
+/* ── Schedules filter / sort toolbar ── */
+.schedules-toolbar {
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 0.6rem; margin-bottom: 1.25rem;
+}
+.filter-chips { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+.filter-chip {
+  background: var(--surface); border: 1.5px solid var(--border);
+  border-radius: 99px; padding: 0.3rem 0.85rem; font-size: 0.8rem;
+  font-family: inherit; font-weight: 500; color: var(--text-muted);
+  cursor: pointer; transition: all 0.15s;
+}
+.filter-chip:hover { border-color: var(--primary); color: var(--primary-dark); }
+.filter-chip.active {
+  background: var(--primary-pale); border-color: var(--primary);
+  color: var(--primary-deeper); font-weight: 600;
+}
+.sort-select {
+  background: var(--surface); border: 1.5px solid var(--border);
+  border-radius: 8px; padding: 0.3rem 0.7rem; font-size: 0.8rem;
+  font-family: inherit; color: var(--text); cursor: pointer;
+  transition: border-color 0.15s;
+}
+.sort-select:hover, .sort-select:focus { border-color: var(--primary); outline: none; }
+.schedules-filter-empty {
+  text-align: center; padding: 2.5rem 1rem; color: var(--text-muted); font-size: 0.9rem;
 }
 .groups-grid {
   display: grid;

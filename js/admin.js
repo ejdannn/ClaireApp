@@ -3,6 +3,7 @@
 // ─────────────────────────────────────────────────────────
 
 let db, currentGroup, groupMembers = [], googleTokenClient;
+let allGroups = []; // full list — filter/sort operates on this
 
 // ── Admin timezone ────────────────────────────────────────
 function getAdminTimezone() {
@@ -53,12 +54,86 @@ async function loadGroups() {
 
   if (error) { showToast('Failed to load groups.', 'error'); return; }
 
-  if (!data || data.length === 0) {
+  allGroups = data || [];
+  document.getElementById('schedulesToolbar').style.display = allGroups.length ? '' : 'none';
+
+  if (!allGroups.length) {
     show('groupsEmpty'); return;
   }
 
-  renderGroupCards(data);
+  applyScheduleFilters();
   show('groupsGrid');
+}
+
+// Returns a 0–100 completion % for a group
+function groupCompletionPct(g) {
+  const members  = g.members || [];
+  const expected = g.expected_members || [];
+  if (!expected.length) return -1; // no expected list set
+  const respondedEmails    = new Set(members.map(m => m.email?.toLowerCase()));
+  const respondedUsernames = new Set(members.map(m => emailUsername(m.email || '')).filter(Boolean));
+  const respondedNames     = new Set(members.map(m => m.name?.toLowerCase()));
+  const matched = expected.filter(e => {
+    const lower = e.toLowerCase();
+    if (lower.includes('@')) {
+      if (respondedEmails.has(lower)) return true;
+      const uname = emailUsername(lower);
+      return uname ? respondedUsernames.has(uname) : false;
+    }
+    return Array.from(respondedNames).some(n => n.includes(lower) || lower.includes(n));
+  }).length;
+  return Math.round((matched / expected.length) * 100);
+}
+
+function applyScheduleFilters() {
+  const filter = document.querySelector('.filter-chip.active')?.dataset.filter || 'all';
+  const sort   = document.getElementById('scheduleSort')?.value || 'newest';
+
+  let groups = [...allGroups];
+
+  // Filter
+  if (filter === 'needs') {
+    groups = groups.filter(g => {
+      const pct = groupCompletionPct(g);
+      return pct >= 0 && pct < 100 && !localStorage.getItem(`claire_scheduled_${g.id}`);
+    });
+  } else if (filter === 'ready') {
+    groups = groups.filter(g => groupCompletionPct(g) === 100 && !localStorage.getItem(`claire_scheduled_${g.id}`));
+  } else if (filter === 'scheduled') {
+    groups = groups.filter(g => !!localStorage.getItem(`claire_scheduled_${g.id}`));
+  }
+
+  // Sort
+  if (sort === 'oldest') {
+    groups.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+  } else if (sort === 'az') {
+    groups.sort((a, b) => a.name.localeCompare(b.name));
+  } else if (sort === 'pct_desc') {
+    groups.sort((a, b) => groupCompletionPct(b) - groupCompletionPct(a));
+  } else if (sort === 'pct_asc') {
+    groups.sort((a, b) => {
+      const pa = groupCompletionPct(a), pb = groupCompletionPct(b);
+      // Put groups with no expected list last
+      if (pa < 0 && pb < 0) return 0;
+      if (pa < 0) return 1;
+      if (pb < 0) return -1;
+      return pa - pb;
+    });
+  } else {
+    // newest (default)
+    groups.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  }
+
+  const grid = document.getElementById('groupsGrid');
+
+  if (!groups.length) {
+    grid.innerHTML = `<div class="schedules-filter-empty" style="grid-column:1/-1;">No schedules match this filter.</div>`;
+    show('groupsGrid'); hide('groupsEmpty');
+    return;
+  }
+
+  hide('groupsEmpty'); show('groupsGrid');
+  renderGroupCards(groups);
 }
 
 function renderGroupCards(groups) {
@@ -69,25 +144,11 @@ function renderGroupCards(groups) {
     const expected = g.expected_members || [];
     const link     = groupLink(g.slug);
 
-    // Progress bar: count only expected members who have responded
-    const showBar = expected.length > 0;
-    let matchedCount = 0;
-    if (showBar) {
-      const respondedEmails    = new Set(members.map(m => m.email?.toLowerCase()));
-      const respondedUsernames = new Set(members.map(m => emailUsername(m.email || '')).filter(Boolean));
-      const respondedNames     = new Set(members.map(m => m.name?.toLowerCase()));
-      matchedCount = expected.filter(e => {
-        const lower = e.toLowerCase();
-        if (lower.includes('@')) {
-          if (respondedEmails.has(lower)) return true;
-          const uname = emailUsername(lower);
-          return uname ? respondedUsernames.has(uname) : false;
-        }
-        return Array.from(respondedNames).some(n => n.includes(lower) || lower.includes(n));
-      }).length;
-    }
-
-    const pct      = showBar ? Math.min(100, Math.round((matchedCount / expected.length) * 100)) : 0;
+    // Progress bar: reuse groupCompletionPct
+    const showBar  = expected.length > 0;
+    const rawPct   = groupCompletionPct(g);
+    const matchedCount = showBar ? Math.round(rawPct / 100 * expected.length) : 0;
+    const pct      = showBar ? Math.max(0, rawPct) : 0;
     const barColor = pct === 100 ? 'var(--success)' : pct >= 50 ? 'var(--primary)' : 'var(--danger)';
     const progressHtml = showBar ? `
       <div class="group-card-progress">
@@ -506,6 +567,18 @@ function bindUI() {
       if (activeTab) switchTab(activeTab);
     });
   }
+
+  // Filter chips
+  document.querySelectorAll('.filter-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      applyScheduleFilters();
+    });
+  });
+
+  // Sort select
+  document.getElementById('scheduleSort').addEventListener('change', applyScheduleFilters);
 
   document.getElementById('createGroupBtn').addEventListener('click', () => {
     loadContactsForPicker();
