@@ -1145,6 +1145,23 @@ label {
 /* ─────────────────────────────────────────────
    CONTACTS
    ───────────────────────────────────────────── */
+.contact-name-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.contact-name-chip {
+  display: inline-block;
+  background: var(--primary-pale);
+  color: var(--primary-deeper);
+  border: 1px solid var(--primary-light);
+  border-radius: 20px;
+  padding: 0.18rem 0.65rem;
+  font-size: 0.78rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
 .contact-member-row {
   display: flex;
   gap: 0.5rem;

@@ -1230,15 +1230,18 @@ function renderContactGroupCards() {
   hide('contactGroupsEmpty'); show('contactGroupsGrid');
 
   grid.innerHTML = contactGroups.map(cg => {
-    const memberNames = (cg.members || []).map(m => escHtml(m.name)).join(', ') || '<span style="color:var(--text-muted)">No people yet</span>';
-    const count = (cg.members || []).length;
+    const members = cg.members || [];
+    const count = members.length;
+    const chips = members.length
+      ? members.map(m => `<span class="contact-name-chip">${escHtml(m.name)}</span>`).join('')
+      : '<span style="color:var(--text-muted);font-size:0.82rem;">No people yet</span>';
     return `
     <div class="group-card">
       <div class="group-card-name">${escHtml(cg.name)}</div>
-      <div class="group-card-meta" style="margin-bottom:0.5rem;">
+      <div class="group-card-meta" style="margin-bottom:0.65rem;">
         <span class="badge badge-primary">${count} person${count !== 1 ? 's' : ''}</span>
       </div>
-      <div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:0.75rem;line-height:1.5;">${memberNames}</div>
+      <div class="contact-name-chips" style="margin-bottom:0.75rem;">${chips}</div>
       <div class="group-card-actions">
         <button class="btn btn-primary btn-sm" onclick="openContactGroupModal(${JSON.stringify(cg).replace(/"/g,'&quot;')})">Edit</button>
         <button class="btn btn-ghost btn-sm" onclick="deleteContactGroup('${cg.id}','${escHtml(cg.name)}')">Delete</button>
