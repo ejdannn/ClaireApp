@@ -37,7 +37,17 @@ function getMembersInAdminTz() {
   setupGoogleAuth();
   await loadGroups();
   bindUI();
+  playLogoSparkle();
 })();
+
+function playLogoSparkle() {
+  if (sessionStorage.getItem('claire_logo_sparkled')) return;
+  sessionStorage.setItem('claire_logo_sparkled', '1');
+  const icon = document.querySelector('.admin-brand-icon');
+  if (!icon) return;
+  icon.classList.add('brand-sparkle');
+  icon.addEventListener('animationend', () => icon.classList.remove('brand-sparkle'), { once: true });
+}
 
 // ── Load all groups ───────────────────────────────────────
 async function loadGroups() {
@@ -96,6 +106,13 @@ function renderGroupCards(groups) {
         <span class="group-card-progress-label">${matchedCount} / ${expected.length} responded</span>
       </div>` : '';
 
+    const scheduledAt = localStorage.getItem(`claire_scheduled_${g.id}`);
+    const bannerHtml = scheduledAt
+      ? `<div class="group-card-banner scheduled"><span class="icon-emoji">✅</span> Scheduled!</div>`
+      : (pct === 100 && showBar)
+        ? `<div class="group-card-banner ready"><span class="icon-emoji">🎉</span> Ready to schedule!</div>`
+        : '';
+
     return `
     <div class="group-card" data-group-id="${g.id}">
       <div class="group-card-name">${escHtml(g.name)}</div>
@@ -104,6 +121,7 @@ function renderGroupCards(groups) {
         &nbsp; Created ${relativeTime(g.created_at)}
       </div>
       ${progressHtml}
+      ${bannerHtml}
       <div class="group-card-actions">
         <button class="btn btn-primary btn-sm view-group-btn" data-group="${escHtml(JSON.stringify(g))}">View</button>
         <button class="btn btn-ghost btn-sm copy-link-btn" data-link="${link}">Copy Link</button>
@@ -676,6 +694,10 @@ document.getElementById('confirmSchedule').addEventListener('click', async () =>
     succEl.innerHTML = `✓ Event created! <a href="${created.htmlLink}" target="_blank" style="font-weight:700;">View in Google Calendar →</a>`;
     succEl.classList.remove('hidden');
     showToast('Meeting created and invites sent!', 'success');
+    // Mark this group as scheduled so the card shows "Scheduled!"
+    if (currentGroup?.id) {
+      localStorage.setItem(`claire_scheduled_${currentGroup.id}`, new Date().toISOString());
+    }
   } catch (e) {
     showScheduleError(e.message);
   } finally {

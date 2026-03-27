@@ -163,6 +163,18 @@ function applyAvailability(avail) {
   }
   refreshDesktopGrid();
   refreshMobileSlots();
+  animateSlotPopIn();
+}
+
+function animateSlotPopIn() {
+  const cells = document.querySelectorAll('.avail-slot.on');
+  let i = 0;
+  cells.forEach(el => {
+    const delay = Math.min(i * 8, 400);
+    setTimeout(() => el.classList.add('slot-popin'), delay);
+    setTimeout(() => el.classList.remove('slot-popin'), delay + 350);
+    i++;
+  });
 }
 
 function goToStep2() {
@@ -435,12 +447,24 @@ async function submitAvailability() {
       if (error) throw error;
     }
 
-    showDoneState();
+    setSubmitLoading(false);
+    pulseSavedCells().then(() => showDoneState());
   } catch (e) {
     showEl(errEl, `Something went wrong: ${e.message}`);
-  } finally {
     setSubmitLoading(false);
   }
+}
+
+function pulseSavedCells() {
+  return new Promise(resolve => {
+    const cells = document.querySelectorAll('.avail-slot.on, .mobile-slot.on');
+    cells.forEach(el => el.classList.add('slot-saved-pulse'));
+    // Remove class after animation and resolve
+    setTimeout(() => {
+      cells.forEach(el => el.classList.remove('slot-saved-pulse'));
+      resolve();
+    }, 600);
+  });
 }
 
 function setSubmitLoading(on) {
