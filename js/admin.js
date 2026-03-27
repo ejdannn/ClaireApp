@@ -227,46 +227,61 @@ function dismissPending(entry) {
   showToast('Removed from waiting list.', 'success');
 }
 
+// Parses "Name <email>", plain email, or plain name
+function parseExpectedEntry(e) {
+  const match = e.match(/^(.+?)\s*<([^>]+)>\s*$/);
+  if (match) return { name: match[1].trim(), email: match[2].trim().toLowerCase() };
+  if (e.includes('@')) return { name: '', email: e.trim().toLowerCase() };
+  return { name: e.trim(), email: '' };
+}
+
 function renderPending() {
   const expected = currentGroup?.expected_members || [];
   if (!expected.length) { hide('pendingSection'); return; }
 
   const respondedEmails    = new Set(groupMembers.map(m => m.email.toLowerCase()));
-  // Also collect just the username parts (before @) so a typo in the domain still matches
   const respondedUsernames = new Set(
     groupMembers.map(m => emailUsername(m.email)).filter(Boolean)
   );
-  const respondedNames     = new Set(groupMembers.map(m => m.name.toLowerCase()));
-  const dismissed          = getDismissed(currentGroup.id);
+  const respondedNames = new Set(groupMembers.map(m => m.name.toLowerCase()));
+  const dismissed      = getDismissed(currentGroup.id);
 
   const pending = expected.filter(e => {
-    // Skip anything manually dismissed
     if (dismissed.includes(e)) return false;
+    const { name, email } = parseExpectedEntry(e);
 
-    const lower = e.toLowerCase();
-    if (lower.includes('@')) {
-      // 1. Exact email match
-      if (respondedEmails.has(lower)) return false;
-      // 2. Same username, different domain (e.g. gmail vs hmail typo)
-      const uname = emailUsername(lower);
+    if (email) {
+      if (respondedEmails.has(email)) return false;
+      const uname = emailUsername(email);
       if (uname && respondedUsernames.has(uname)) return false;
-      return true;
     }
-    // Name-only entry: fuzzy name match
-    return !Array.from(respondedNames).some(n => n.includes(lower) || lower.includes(n));
+    if (name) {
+      const lower = name.toLowerCase();
+      if (Array.from(respondedNames).some(n => n.includes(lower) || lower.includes(n))) return false;
+    }
+    // Only mark as responded if we matched something
+    if (!email && !name) return false;
+    return true;
   });
 
   if (!pending.length) { hide('pendingSection'); return; }
 
   show('pendingSection');
   document.getElementById('pendingCount').textContent = `${pending.length} pending`;
-  document.getElementById('pendingList').innerHTML = pending.map(p => `
+  document.getElementById('pendingList').innerHTML = pending.map(p => {
+    const { name, email } = parseExpectedEntry(p);
+    return `
     <div class="pending-item">
       <span class="activity-dot red"></span>
-      <span style="flex:1;">${escHtml(p)}</span>
+      <div style="flex:1;min-width:0;">
+        ${name ? `<div style="font-weight:600;font-size:0.875rem;">${escHtml(name)}</div>` : ''}
+        ${email ? `<div style="font-size:0.78rem;color:var(--text-muted);">${escHtml(email)}</div>` : ''}
+        ${!name && !email ? `<div>${escHtml(p)}</div>` : ''}
+      </div>
       <button class="btn-icon" title="Remove from waiting list"
         onclick="dismissPending(${JSON.stringify(p)})">✕</button>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 function renderMembers() {
@@ -828,7 +843,8 @@ async function nudgeMembers() {
   const expected = currentGroup?.expected_members || [];
   const responded = new Set(groupMembers.map(m => m.email.toLowerCase()));
   const pendingEmails = expected
-    .filter(e => e.includes('@') && !responded.has(e.toLowerCase()));
+    .map(e => parseExpectedEntry(e).email)
+    .filter(email => email && !responded.has(email));
 
   if (!pendingEmails.length) {
     showToast('No email addresses to nudge — add emails to the expected list.', 'info');
@@ -1398,14 +1414,21 @@ function togglePickerGroup(groupId) {
 
 function syncContactsToExpected() {
   const textarea = document.getElementById('newGroupExpected');
+
+  // Build the full formatted entry for each contact checkbox
+  const entryFor = cb => {
+    const n = cb.dataset.name, e = cb.dataset.email;
+    if (n && e) return `${n} <${e}>`;
+    return e || n;
+  };
+
   const allContactEntries = new Set(
-    [...document.querySelectorAll('#contactPickerList input[type="checkbox"]')]
-      .map(cb => cb.dataset.email || cb.dataset.name)
+    [...document.querySelectorAll('#contactPickerList input[type="checkbox"]')].map(entryFor)
   );
   const checkedEntries = [...document.querySelectorAll('#contactPickerList input[type="checkbox"]:checked')]
-    .map(cb => cb.dataset.email || cb.dataset.name);
+    .map(entryFor);
 
-  // Keep manually typed lines, replace contact lines
+  // Keep manually typed lines, replace contact-sourced lines
   const manualLines = textarea.value.split('\n')
     .map(s => s.trim())
     .filter(s => s && !allContactEntries.has(s));
