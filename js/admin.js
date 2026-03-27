@@ -376,7 +376,7 @@ document.getElementById('closeSlotDetailBtn').addEventListener('click', closeSlo
 
 document.getElementById('scheduleFromSlotBtn').addEventListener('click', () => {
   closeSlotDetail();
-  prefillSchedule({ day: slotDetailDay, startSlot: slotDetailSlot });
+  scheduleFromHeatmapSlot(slotDetailDay, slotDetailSlot);
 });
 
 // ── Recommended times tab ─────────────────────────────────
@@ -493,6 +493,11 @@ async function confirmDeleteGroup(groupId, groupName) {
 let selectedRec = null, selectedDate = null, selectedStartTime = null;
 
 function openScheduleModal() {
+  // Show suggested times section, normal label
+  document.getElementById('scheduleStep1').classList.remove('hidden');
+  document.getElementById('scheduleTimeLabelNormal').classList.remove('hidden');
+  document.getElementById('scheduleTimeLabelSlot').classList.add('hidden');
+
   // Reset recurrence UI
   const recSel = document.getElementById('meetingRecurrence');
   if (recSel) { recSel.value = ''; document.getElementById('untilDateGroup').style.display = 'none'; }
@@ -571,6 +576,21 @@ function prefillSchedule(rec) {
   openScheduleModal();
   selectedRec = rec;
   prefillDateTimeFromRec(rec);
+}
+
+// Called from heatmap "Schedule at This Time" button
+function scheduleFromHeatmapSlot(day, slot) {
+  openScheduleModal();
+
+  // Hide suggested times, show the chosen slot as a simple label
+  document.getElementById('scheduleStep1').classList.add('hidden');
+  document.getElementById('scheduleTimeLabelNormal').classList.add('hidden');
+  document.getElementById('scheduleTimeLabelSlot').classList.remove('hidden');
+  document.getElementById('slotTimeLabel').textContent =
+    `${DAYS[day]} at ${slotToTime(slot)}`;
+
+  selectedRec = { day, startSlot: slot };
+  prefillDateTimeFromRec({ day, startSlot: slot });
 }
 
 document.getElementById('closeScheduleModal').addEventListener('click', () => hide('scheduleModal'));
