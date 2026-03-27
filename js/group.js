@@ -246,6 +246,7 @@ function buildDesktopGrid() {
     const d = +slot.dataset.day, s = +slot.dataset.slot;
     dragAction = availability[d].has(s) ? 'remove' : 'add';
     toggleSlot(d, s);
+    addSlotRipple(slot);
     refreshDesktopGrid();
   });
 
@@ -363,6 +364,7 @@ function openCopyPopover(anchorBtn, targetDay) {
       refreshDesktopGrid();
       refreshMobileSlots();
       closeCopyPopover();
+      flashCopiedDay(targetDay);
     });
   });
 
@@ -376,6 +378,22 @@ function openCopyPopover(anchorBtn, targetDay) {
 
 function closeCopyPopover() {
   if (activeCopyPopover) { activeCopyPopover.remove(); activeCopyPopover = null; }
+}
+
+function addSlotRipple(el) {
+  const ripple = document.createElement('span');
+  ripple.className = 'slot-ripple';
+  el.appendChild(ripple);
+  ripple.addEventListener('animationend', () => ripple.remove(), { once: true });
+}
+
+function flashCopiedDay(day) {
+  document.querySelectorAll(`.avail-slot[data-day="${day}"].on`).forEach((el, i) => {
+    setTimeout(() => {
+      el.classList.add('slot-copy-flash');
+      el.addEventListener('animationend', () => el.classList.remove('slot-copy-flash'), { once: true });
+    }, i * 6);
+  });
 }
 
 // Mobile: "Copy from" row shown below day tabs
@@ -395,6 +413,7 @@ function buildMobileCopyRow() {
       availability[activeMobileDay] = new Set(availability[fromDay]);
       refreshMobileSlots();
       refreshDesktopGrid();
+      flashCopiedDay(activeMobileDay);
     });
   });
 }

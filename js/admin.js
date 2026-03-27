@@ -92,7 +92,7 @@ function renderGroupCards(groups) {
     const progressHtml = showBar ? `
       <div class="group-card-progress">
         <div class="group-card-progress-bar">
-          <div class="group-card-progress-fill" style="width:${pct}%;background:${barColor};"></div>
+          <div class="group-card-progress-fill" style="width:0%;background:${barColor};" data-pct="${pct}"></div>
         </div>
         <span class="group-card-progress-label">${matchedCount} / ${expected.length} responded</span>
       </div>` : '';
@@ -130,6 +130,13 @@ function renderGroupCards(groups) {
   grid.querySelectorAll('.delete-group-btn').forEach(btn =>
     btn.addEventListener('click', () => confirmDeleteGroup(btn.dataset.groupId, btn.dataset.groupName))
   );
+
+  // Animate progress bars from 0 to real value
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    grid.querySelectorAll('.group-card-progress-fill').forEach(el => {
+      el.style.width = (el.dataset.pct || 0) + '%';
+    });
+  }));
 }
 
 function groupLink(slug) {
@@ -175,7 +182,14 @@ document.querySelectorAll('.tab-btn').forEach(btn =>
 function switchTab(tab) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   document.querySelectorAll('.tab-panel').forEach(p => {
-    p.classList.toggle('hidden', p.id !== `tab-${tab}`);
+    const isActive = p.id === `tab-${tab}`;
+    if (isActive) {
+      p.classList.remove('hidden');
+      p.classList.add('tab-enter');
+      p.addEventListener('animationend', () => p.classList.remove('tab-enter'), { once: true });
+    } else {
+      p.classList.add('hidden');
+    }
   });
 
   if (tab === 'members')      renderMembers();
@@ -269,7 +283,7 @@ function renderMembers() {
   );
 
   list.innerHTML = sorted.map(m => `
-    <div class="member-item">
+    <div class="member-item member-slide-in">
       <div style="display:flex;align-items:center;gap:0.5rem;">
         ${activityDot(m.updated_at || m.created_at)}
         <div>
@@ -283,6 +297,10 @@ function renderMembers() {
           onclick="removeMember('${m.id}','${escHtml(m.name)}')"><span class="icon-emoji">🗑</span></button>
       </div>
     </div>`).join('');
+
+  list.querySelectorAll('.member-slide-in').forEach((el, i) => {
+    el.style.animationDelay = `${i * 55}ms`;
+  });
 }
 
 async function removeMember(memberId, name) {
@@ -329,6 +347,14 @@ function renderHeatmap() {
   }
 
   grid.innerHTML = html;
+
+  // Fade in columns left to right
+  grid.querySelectorAll('.heatmap-cell').forEach(el => {
+    const day = +el.dataset.day;
+    el.style.animationDelay = `${day * 55}ms`;
+    el.classList.add('heatmap-col-fadein');
+    el.addEventListener('animationend', () => el.classList.remove('heatmap-col-fadein'), { once: true });
+  });
 
   // Legend
   document.getElementById('heatmapLegend').innerHTML = `
