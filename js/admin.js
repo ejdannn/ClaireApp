@@ -330,7 +330,12 @@ function renderHeatmap() {
 }
 
 // ── Slot detail popup ─────────────────────────────────────
+let slotDetailDay = 0, slotDetailSlot = 0;
+
 function showSlotDetail(day, slot) {
+  slotDetailDay  = day;
+  slotDetailSlot = slot;
+
   const tzMembers = getMembersInAdminTz();
   const available   = tzMembers.filter(m => (m.availability?.[day] || []).includes(slot));
   const unavailable = tzMembers.filter(m => !(m.availability?.[day] || []).includes(slot));
@@ -362,8 +367,16 @@ function showSlotDetail(day, slot) {
   document.getElementById('slotDetailModal').classList.remove('hidden');
 }
 
-document.getElementById('closeSlotDetailModal').addEventListener('click', () => {
+function closeSlotDetail() {
   document.getElementById('slotDetailModal').classList.add('hidden');
+}
+
+document.getElementById('closeSlotDetailModal').addEventListener('click', closeSlotDetail);
+document.getElementById('closeSlotDetailBtn').addEventListener('click', closeSlotDetail);
+
+document.getElementById('scheduleFromSlotBtn').addEventListener('click', () => {
+  closeSlotDetail();
+  prefillSchedule({ day: slotDetailDay, startSlot: slotDetailSlot });
 });
 
 // ── Recommended times tab ─────────────────────────────────
