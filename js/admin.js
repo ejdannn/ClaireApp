@@ -156,7 +156,21 @@ async function openGroupDetail(group) {
   document.getElementById('detailExportBtn').onclick   = exportToSheets;
 
   await loadGroupMembers(group.id);
+  // Load contacts silently so name lookup works in the pending section
+  if (!contactGroups.length) ensureContactsLoaded();
   switchTab('members');
+}
+
+async function ensureContactsLoaded() {
+  try {
+    const res = await fetch(`/api/contacts?adminCode=${encodeURIComponent(getAdminCode())}`);
+    const data = await res.json();
+    if (res.ok && data.length) {
+      contactGroups = data;
+      // Re-render pending now that we have name data
+      renderPending();
+    }
+  } catch { /* silent */ }
 }
 
 async function loadGroupMembers(groupId) {
@@ -235,6 +249,18 @@ function parseExpectedEntry(e) {
   return { name: e.trim(), email: '' };
 }
 
+// Looks up a name for a plain email in the contacts cache
+function nameFromContacts(email) {
+  if (!email || !contactGroups.length) return '';
+  const lower = email.toLowerCase();
+  for (const cg of contactGroups) {
+    for (const m of (cg.members || [])) {
+      if (m.email && m.email.toLowerCase() === lower) return m.name;
+    }
+  }
+  return '';
+}
+
 function renderPending() {
   const expected = currentGroup?.expected_members || [];
   if (!expected.length) { hide('pendingSection'); return; }
@@ -269,12 +295,14 @@ function renderPending() {
   show('pendingSection');
   document.getElementById('pendingCount').textContent = `${pending.length} pending`;
   document.getElementById('pendingList').innerHTML = pending.map(p => {
-    const { name, email } = parseExpectedEntry(p);
+    const parsed = parseExpectedEntry(p);
+    const name  = parsed.name  || nameFromContacts(parsed.email);
+    const email = parsed.email;
     return `
     <div class="pending-item">
       <span class="activity-dot red"></span>
       <div style="flex:1;min-width:0;">
-        ${name ? `<div style="font-weight:600;font-size:0.875rem;">${escHtml(name)}</div>` : ''}
+        ${name  ? `<div style="font-weight:600;font-size:0.875rem;">${escHtml(name)}</div>`  : ''}
         ${email ? `<div style="font-size:0.78rem;color:var(--text-muted);">${escHtml(email)}</div>` : ''}
         ${!name && !email ? `<div>${escHtml(p)}</div>` : ''}
       </div>
@@ -1375,6 +1403,7 @@ async function loadContactsForPicker() {
       pickerEl.innerHTML = '<p class="text-muted" style="font-size:0.8rem;">No contacts yet. Add some in the Contacts tab.</p>';
       return;
     }
+    contactGroups = data; // keep cache in sync
     const sorted = [...data].sort((a, b) => a.name.localeCompare(b.name));
     pickerEl.innerHTML = sorted.map((cg, i) => {
       const groupId = `cpg-${i}`;
