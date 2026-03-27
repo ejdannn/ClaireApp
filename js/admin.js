@@ -340,7 +340,8 @@ function renderHeatmap() {
       const count = matrix[d][s];
       const intensity = count / total;
       const bg = heatColor(intensity);
-      html += `<div class="heatmap-cell" style="background:${bg}"
+      const tip = `${DAYS[d]} ${slotToTime(s)}: ${count}/${total} available`;
+      html += `<div class="heatmap-cell" style="background:${bg}" title="${tip}"
         data-day="${d}" data-slot="${s}" onclick="showSlotDetail(${d},${s})"></div>`;
     }
   }
