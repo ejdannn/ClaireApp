@@ -1226,6 +1226,66 @@ function closeContactGroupModal() {
   editingContactGroupId = null;
 }
 
+function toggleImportBox() {
+  const box = document.getElementById('importBox');
+  const isHidden = box.classList.contains('hidden');
+  box.classList.toggle('hidden', !isHidden);
+  if (isHidden) {
+    document.getElementById('importPasteArea').value = '';
+    document.getElementById('importFeedback').textContent = '';
+    document.getElementById('importPasteArea').focus();
+  }
+}
+
+function runImport() {
+  const raw = document.getElementById('importPasteArea').value.trim();
+  if (!raw) return;
+
+  // Collect existing emails to skip duplicates
+  const existingEmails = new Set(
+    [...document.querySelectorAll('.contact-member-email')]
+      .map(i => i.value.trim().toLowerCase()).filter(Boolean)
+  );
+
+  const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+  let added = 0;
+
+  for (const line of lines) {
+    // Split on tab (Google Sheets copy-paste) or comma
+    const parts = line.includes('\t')
+      ? line.split('\t').map(p => p.trim())
+      : line.split(',').map(p => p.trim());
+
+    let name = '', email = '';
+
+    for (const part of parts) {
+      const clean = part.replace(/^["']|["']$/g, '');
+      if (clean.includes('@')) {
+        if (!email) email = clean;
+      } else if (clean) {
+        if (!name) name = clean;
+      }
+    }
+
+    // Single part with no @ is a name only
+    if (parts.length === 1 && !parts[0].includes('@')) {
+      name = parts[0].replace(/^["']|["']$/g, '');
+      email = '';
+    }
+
+    if (!name && !email) continue;
+    if (email && existingEmails.has(email.toLowerCase())) continue;
+
+    addContactMemberRow(name, email);
+    if (email) existingEmails.add(email.toLowerCase());
+    added++;
+  }
+
+  document.getElementById('importFeedback').textContent =
+    added > 0 ? `${added} person${added !== 1 ? 's' : ''} added!` : 'Nothing new to add.';
+  document.getElementById('importPasteArea').value = '';
+}
+
 function addContactMemberRow(name = '', email = '') {
   const rows = document.getElementById('contactMemberRows');
   const row = document.createElement('div');

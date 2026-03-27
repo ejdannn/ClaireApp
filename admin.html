@@ -205,11 +205,30 @@
         <label for="contactGroupName">Group Name <span style="color:var(--danger)">*</span></label>
         <input type="text" id="contactGroupName" placeholder="e.g. Bow ADs, Book Club, Rehearsal Team…" maxlength="60" />
       </div>
-      <div class="form-group" style="margin-bottom:0.5rem;">
+      <div class="form-group" style="margin-bottom:0.75rem;">
         <label>People</label>
         <p class="text-muted" style="font-size:0.8rem;margin-bottom:0.6rem;">Add everyone in this contact group. Names are shown in Contacts; emails are used for nudges and expected member matching.</p>
         <div id="contactMemberRows"></div>
-        <button class="btn btn-ghost btn-sm" id="addContactMemberBtn" style="margin-top:0.4rem;">+ Add Person</button>
+        <div style="display:flex;gap:0.5rem;margin-top:0.4rem;flex-wrap:wrap;">
+          <button class="btn btn-ghost btn-sm" id="addContactMemberBtn">+ Add Person</button>
+          <button class="btn btn-ghost btn-sm" id="toggleImportBtn" onclick="toggleImportBox()"><span class="icon-emoji">📋</span> Import from spreadsheet</button>
+        </div>
+      </div>
+
+      <!-- Import box (hidden by default) -->
+      <div id="importBox" class="hidden" style="margin-bottom:0.75rem;">
+        <div style="background:var(--primary-pale);border:1px solid var(--primary-light);border-radius:10px;padding:1rem;">
+          <p style="font-size:0.82rem;color:var(--primary-deeper);margin-bottom:0.5rem;font-weight:600;">Paste from Google Sheets or any spreadsheet</p>
+          <p class="text-muted" style="font-size:0.78rem;margin-bottom:0.6rem;">Copy cells from your spreadsheet and paste below. Works with any format: Name + Email columns, Email + Name, email only, or one entry per line. Duplicate emails are skipped automatically.</p>
+          <textarea id="importPasteArea" rows="5" placeholder="John Smith	john@example.com
+Jane Doe	jane@example.com
+bob@example.com" style="width:100%;font-size:0.82rem;font-family:monospace;border:1px solid var(--border);border-radius:6px;padding:0.5rem;resize:vertical;box-sizing:border-box;"></textarea>
+          <div style="display:flex;gap:0.5rem;margin-top:0.5rem;align-items:center;">
+            <button class="btn btn-primary btn-sm" onclick="runImport()">Add These People</button>
+            <button class="btn btn-ghost btn-sm" onclick="toggleImportBox()">Cancel</button>
+            <span id="importFeedback" style="font-size:0.78rem;color:var(--success);"></span>
+          </div>
+        </div>
       </div>
       <div id="contactGroupError" class="error-msg hidden"></div>
     </div>
