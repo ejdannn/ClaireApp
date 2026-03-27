@@ -488,7 +488,10 @@ function setSubmitLoading(on) {
 
 function showDoneState() {
   document.getElementById('step2Panel').classList.remove('active');
-  document.getElementById('donePanelWrap').style.display = 'block';
+  const wrap = document.getElementById('donePanelWrap');
+  wrap.style.display = 'block';
+  wrap.classList.add('done-panel-enter');
+  wrap.addEventListener('animationend', () => wrap.classList.remove('done-panel-enter'), { once: true });
   document.getElementById('step2Dot').classList.remove('active');
   document.getElementById('step2Dot').classList.add('done');
   document.getElementById('step2Dot').textContent = '✓';
