@@ -1233,8 +1233,12 @@ function renderContactGroupCards() {
     const members = cg.members || [];
     const count = members.length;
     const cgId = `cg-drop-${cg.id}`;
-    const memberRows = members.length
-      ? members.map((m, idx) => `
+    // Sort alphabetically for display but keep original index for deletion
+    const sorted = members
+      .map((m, idx) => ({ m, idx }))
+      .sort((a, b) => a.m.name.localeCompare(b.m.name));
+    const memberRows = sorted.length
+      ? sorted.map(({ m, idx }) => `
           <div class="contact-card-member-row">
             <span class="contact-card-member-name">${escHtml(m.name)}</span>
             ${m.email ? `<span class="contact-card-member-email">${escHtml(m.email)}</span>` : ''}
