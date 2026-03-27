@@ -1359,22 +1359,41 @@ async function loadContactsForPicker() {
       pickerEl.innerHTML = '<p class="text-muted" style="font-size:0.8rem;">No contacts yet. Add some in the Contacts tab.</p>';
       return;
     }
-    pickerEl.innerHTML = data.map(cg => `
+    const sorted = [...data].sort((a, b) => a.name.localeCompare(b.name));
+    pickerEl.innerHTML = sorted.map((cg, i) => {
+      const groupId = `cpg-${i}`;
+      const membersSorted = [...(cg.members || [])].sort((a, b) => a.name.localeCompare(b.name));
+      return `
       <div class="contact-picker-group">
-        <div class="contact-picker-group-name">${escHtml(cg.name)}</div>
-        ${(cg.members || []).map(m => `
-          <label class="contact-picker-item">
-            <input type="checkbox"
-              data-name="${escHtml(m.name)}"
-              data-email="${escHtml(m.email || '')}"
-              onchange="syncContactsToExpected()" />
-            <span class="contact-picker-name">${escHtml(m.name)}</span>
-            ${m.email ? `<span class="contact-picker-email">${escHtml(m.email)}</span>` : ''}
-          </label>`).join('')}
-      </div>`).join('');
+        <button type="button" class="contact-picker-group-header" onclick="togglePickerGroup('${groupId}')">
+          <span class="contact-picker-group-name">${escHtml(cg.name)}</span>
+          <span class="contact-picker-group-meta">${membersSorted.length} person${membersSorted.length !== 1 ? 's' : ''}</span>
+          <span class="contact-picker-chevron" id="${groupId}-chevron">▸</span>
+        </button>
+        <div class="contact-picker-group-body hidden" id="${groupId}">
+          ${membersSorted.map(m => `
+            <label class="contact-picker-item">
+              <input type="checkbox"
+                data-name="${escHtml(m.name)}"
+                data-email="${escHtml(m.email || '')}"
+                onchange="syncContactsToExpected()" />
+              <span class="contact-picker-name">${escHtml(m.name)}</span>
+              ${m.email ? `<span class="contact-picker-email">${escHtml(m.email)}</span>` : ''}
+            </label>`).join('')}
+        </div>
+      </div>`;
+    }).join('');
   } catch {
     pickerEl.innerHTML = '<p class="text-muted" style="font-size:0.8rem;">Could not load contacts.</p>';
   }
+}
+
+function togglePickerGroup(groupId) {
+  const body    = document.getElementById(groupId);
+  const chevron = document.getElementById(`${groupId}-chevron`);
+  const isHidden = body.classList.contains('hidden');
+  body.classList.toggle('hidden', !isHidden);
+  chevron.textContent = isHidden ? '▾' : '▸';
 }
 
 function syncContactsToExpected() {

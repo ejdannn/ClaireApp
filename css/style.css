@@ -1174,15 +1174,29 @@ label {
 .contact-member-remove:hover { color: var(--danger); background: var(--danger-light); }
 
 /* Contact picker in Create Schedule modal */
-.contact-picker-group { margin-bottom: 0.75rem; }
-.contact-picker-group-name {
-  font-size: 0.78rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-muted);
-  margin-bottom: 0.3rem;
+.contact-picker-group { margin-bottom: 0.35rem; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.contact-picker-group-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  background: var(--surface2);
+  border: none;
+  padding: 0.5rem 0.65rem;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
 }
+.contact-picker-group-header:hover { background: var(--primary-pale); }
+.contact-picker-group-name {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--primary-dark);
+  flex: 1;
+}
+.contact-picker-group-meta { font-size: 0.75rem; color: var(--text-muted); }
+.contact-picker-chevron { font-size: 0.75rem; color: var(--text-muted); }
+.contact-picker-group-body { padding: 0.25rem 0.4rem 0.4rem; }
 .contact-picker-item {
   display: flex;
   align-items: center;
