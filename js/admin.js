@@ -525,6 +525,12 @@ function bindUI() {
   document.getElementById('cancelContactGroup').addEventListener('click', closeContactGroupModal);
   document.getElementById('confirmContactGroup').addEventListener('click', saveContactGroup);
   document.getElementById('addContactMemberBtn').addEventListener('click', addContactMemberRow);
+
+  // Edit schedule modal
+  document.getElementById('detailEditBtn').addEventListener('click', openEditScheduleModal);
+  document.getElementById('closeEditScheduleModal').addEventListener('click', closeEditScheduleModal);
+  document.getElementById('cancelEditSchedule').addEventListener('click', closeEditScheduleModal);
+  document.getElementById('confirmEditSchedule').addEventListener('click', saveScheduleEdits);
 }
 
 function closeCreateModal() {
@@ -1268,7 +1274,8 @@ function renderContactGroupCards() {
 async function removeContactMember(groupId, memberIdx) {
   const cg = contactGroups.find(c => c.id === groupId);
   if (!cg) return;
-  const memberName = cg.members[memberIdx]?.name || 'this person';
+  const member = cg.members[memberIdx];
+  const memberName = member?.name || 'this person';
   if (!confirm(`Remove ${memberName} from "${cg.name}"?`)) return;
 
   const newMembers = cg.members.filter((_, i) => i !== memberIdx);
@@ -1283,6 +1290,66 @@ async function removeContactMember(groupId, memberIdx) {
   // Re-open the dropdown they were in
   const drop = document.getElementById(`cg-drop-${groupId}`);
   if (drop) drop.open = true;
+
+  // Offer to also remove from any schedules' expected lists
+  if (member) await offerRemoveFromSchedules(member);
+}
+
+async function offerRemoveFromSchedules(member) {
+  // Fetch all schedules and check expected_members for this person
+  const { data: groups, error } = await db
+    .from('groups')
+    .select('id, name, expected_members')
+    .not('expected_members', 'is', null);
+  if (error || !groups?.length) return;
+
+  const memberEmail = member.email?.toLowerCase();
+  const memberName  = member.name?.toLowerCase();
+
+  const affected = groups.filter(g => {
+    return (g.expected_members || []).some(e => {
+      const parsed = parseExpectedEntry(e);
+      if (memberEmail && parsed.email && parsed.email === memberEmail) return true;
+      if (memberName  && parsed.name  && parsed.name.toLowerCase() === memberName) return true;
+      return false;
+    });
+  });
+
+  if (!affected.length) return;
+
+  const names = affected.map(g => `"${g.name}"`).join(', ');
+  const doRemove = confirm(
+    `${member.name} also appears in the expected list for ${names}.\nRemove them from those schedule(s) too?`
+  );
+  if (!doRemove) return;
+
+  for (const g of affected) {
+    const updated = (g.expected_members || []).filter(e => {
+      const parsed = parseExpectedEntry(e);
+      if (memberEmail && parsed.email && parsed.email === memberEmail) return false;
+      if (memberName  && parsed.name  && parsed.name.toLowerCase() === memberName) return false;
+      return true;
+    });
+    await fetch('/api/update-group', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: g.id, expectedMembers: updated, adminCode: getAdminCode() }),
+    });
+  }
+  showToast(`Removed from ${affected.length} schedule${affected.length !== 1 ? 's' : ''}.`, 'success');
+  // Refresh current group detail if it was one of the affected
+  if (currentGroup && affected.some(g => g.id === currentGroup.id)) {
+    const updatedGroup = affected.find(g => g.id === currentGroup.id);
+    if (updatedGroup) {
+      currentGroup.expected_members = (updatedGroup.expected_members || []).filter(e => {
+        const parsed = parseExpectedEntry(e);
+        if (memberEmail && parsed.email && parsed.email === memberEmail) return false;
+        if (memberName  && parsed.name  && parsed.name.toLowerCase() === memberName) return false;
+        return true;
+      });
+      renderMembers();
+    }
+  }
 }
 
 function openContactGroupModal(group) {
@@ -1428,6 +1495,116 @@ async function deleteContactGroup(id, name) {
   if (!res.ok) { showToast('Failed to delete.', 'error'); return; }
   showToast(`"${name}" deleted.`, 'success');
   await loadContactGroups();
+}
+
+// ── Contact search (Contacts tab) ─────────────────────────
+function filterContacts(query) {
+  const resultsEl = document.getElementById('contactSearchResults');
+  const gridEl    = document.getElementById('contactGroupsGrid');
+  const emptyEl   = document.getElementById('contactGroupsEmpty');
+
+  if (!query.trim()) {
+    resultsEl.classList.add('hidden');
+    resultsEl.innerHTML = '';
+    // Restore normal grid / empty state
+    if (contactGroups.length) {
+      gridEl.classList.remove('hidden');
+      emptyEl.classList.add('hidden');
+    } else {
+      gridEl.classList.add('hidden');
+      emptyEl.classList.remove('hidden');
+    }
+    return;
+  }
+
+  // While searching, hide normal grid
+  gridEl.classList.add('hidden');
+  emptyEl.classList.add('hidden');
+  resultsEl.classList.remove('hidden');
+
+  const q = query.trim().toLowerCase();
+  const hits = [];
+  for (const cg of contactGroups) {
+    for (const m of (cg.members || [])) {
+      const nameMatch  = m.name?.toLowerCase().includes(q);
+      const emailMatch = m.email?.toLowerCase().includes(q);
+      if (nameMatch || emailMatch) {
+        hits.push({ m, groupName: cg.name });
+      }
+    }
+  }
+
+  if (!hits.length) {
+    resultsEl.innerHTML = '<p class="text-muted" style="font-size:0.85rem;padding:0.5rem 0;">No people match your search.</p>';
+    return;
+  }
+
+  resultsEl.innerHTML = hits.map(({ m, groupName }) => `
+    <div class="pending-item" style="background:var(--surface-alt,#f9f9f9);border-radius:10px;padding:0.6rem 0.9rem;margin-bottom:0.5rem;">
+      <div style="flex:1;min-width:0;">
+        <div style="font-weight:600;font-size:0.875rem;">${escHtml(m.name)}</div>
+        ${m.email ? `<div style="font-size:0.78rem;color:var(--text-muted);">${escHtml(m.email)}</div>` : ''}
+      </div>
+      <span class="badge badge-primary" style="font-size:0.72rem;flex-shrink:0;">${escHtml(groupName)}</span>
+    </div>`).join('');
+}
+
+// ── Edit schedule ──────────────────────────────────────────
+function openEditScheduleModal() {
+  if (!currentGroup) return;
+  document.getElementById('editScheduleName').value    = currentGroup.name || '';
+  document.getElementById('editScheduleDesc').value    = currentGroup.description || '';
+  document.getElementById('editScheduleExpected').value =
+    (currentGroup.expected_members || []).join('\n');
+  document.getElementById('editScheduleError').classList.add('hidden');
+  document.getElementById('editScheduleModal').classList.remove('hidden');
+  document.getElementById('editScheduleName').focus();
+}
+
+function closeEditScheduleModal() {
+  document.getElementById('editScheduleModal').classList.add('hidden');
+}
+
+async function saveScheduleEdits() {
+  const name        = document.getElementById('editScheduleName').value.trim();
+  const description = document.getElementById('editScheduleDesc').value.trim();
+  const expected    = document.getElementById('editScheduleExpected').value
+    .split('\n').map(s => s.trim()).filter(Boolean);
+  const errEl = document.getElementById('editScheduleError');
+  errEl.classList.add('hidden');
+
+  if (!name) { errEl.textContent = 'Schedule name is required.'; errEl.classList.remove('hidden'); return; }
+
+  const btn = document.getElementById('confirmEditSchedule');
+  btn.disabled = true; btn.textContent = 'Saving...';
+
+  try {
+    const res = await fetch('/api/update-group', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: currentGroup.id,
+        name,
+        description,
+        expectedMembers: expected,
+        adminCode: getAdminCode(),
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to save changes.');
+
+    // Update local state
+    currentGroup = { ...currentGroup, name, description, expected_members: expected };
+    document.getElementById('detailGroupName').textContent = name;
+    closeEditScheduleModal();
+    showToast('Schedule updated!', 'success');
+    // Refresh member section in case expected list changed
+    renderMembers();
+  } catch (e) {
+    errEl.textContent = e.message; errEl.classList.remove('hidden');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Save Changes';
+  }
 }
 
 // ── Contact picker (in Create Schedule modal) ─────────────
