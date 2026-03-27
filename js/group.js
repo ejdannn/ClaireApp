@@ -66,6 +66,7 @@ async function loadGroup(slug) {
 // ── Step 1: Name + email ──────────────────────────────────
 document.getElementById('step1NextBtn').addEventListener('click', handleStep1);
 document.getElementById('memberEmail').addEventListener('blur', checkExistingMember);
+document.getElementById('memberName').addEventListener('blur', checkExistingMember);
 
 async function handleStep1() {
   const name  = document.getElementById('memberName').value.trim();
@@ -84,37 +85,84 @@ async function checkExistingMember() {
   const email = document.getElementById('memberEmail').value.trim().toLowerCase();
   if (!email.includes('@')) return;
 
-  const { data } = await db
+  // ── 1. Check this group first (existing member updating their response) ──
+  const { data: thisGroupMatch } = await db
     .from('members')
     .select('*')
     .eq('group_id', groupData.id)
     .eq('email', email)
     .single();
 
-  if (data) {
-    existingMember = data;
-    // Pre-fill name
+  if (thisGroupMatch) {
+    existingMember = thisGroupMatch;
     if (!document.getElementById('memberName').value) {
-      document.getElementById('memberName').value = data.name;
+      document.getElementById('memberName').value = thisGroupMatch.name;
     }
-    // Load existing availability
-    const avail = data.availability || {};
-    for (let d = 0; d < 7; d++) {
-      availability[d] = new Set(avail[d] || []);
-    }
-    // Pre-fill timezone if stored
-    if (avail.tz) {
-      const tzSel = document.getElementById('memberTimezone');
-      if (tzSel) tzSel.value = avail.tz;
-    }
-    // Refresh the grid so existing slots are visually shown
-    refreshDesktopGrid();
-    refreshMobileSlots();
+    applyAvailability(thisGroupMatch.availability);
     show('returningNotice');
-  } else {
-    existingMember = null;
-    hide('returningNotice');
+    hide('prefillNotice');
+    return;
   }
+
+  // ── 2. Not in this group yet. Check other groups for a pre-fill match ──
+  existingMember = null;
+  hide('returningNotice');
+
+  let crossMatch = null;
+
+  // 2a. Match by email across other groups
+  const { data: emailMatches } = await db
+    .from('members')
+    .select('*')
+    .eq('email', email)
+    .neq('group_id', groupData.id)
+    .order('updated_at', { ascending: false })
+    .limit(1);
+
+  if (emailMatches?.length) {
+    crossMatch = emailMatches[0];
+  }
+
+  // 2b. If no email match, try fuzzy name match across other groups
+  if (!crossMatch) {
+    const name = document.getElementById('memberName').value.trim();
+    if (name.length >= 2) {
+      const { data: nameMatches } = await db
+        .from('members')
+        .select('*')
+        .ilike('name', name)
+        .neq('group_id', groupData.id)
+        .order('updated_at', { ascending: false })
+        .limit(1);
+
+      if (nameMatches?.length) crossMatch = nameMatches[0];
+    }
+  }
+
+  if (crossMatch) {
+    // Pre-fill name if blank
+    if (!document.getElementById('memberName').value) {
+      document.getElementById('memberName').value = crossMatch.name;
+    }
+    applyAvailability(crossMatch.availability);
+    show('prefillNotice');
+  } else {
+    hide('prefillNotice');
+  }
+}
+
+// Loads an availability object into the grid (used for both returning + pre-fill)
+function applyAvailability(avail) {
+  const a = avail || {};
+  for (let d = 0; d < 7; d++) {
+    availability[d] = new Set(a[d] || []);
+  }
+  if (a.tz) {
+    const tzSel = document.getElementById('memberTimezone');
+    if (tzSel) tzSel.value = a.tz;
+  }
+  refreshDesktopGrid();
+  refreshMobileSlots();
 }
 
 function goToStep2() {

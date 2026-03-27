@@ -835,6 +835,15 @@ label {
   margin-bottom: 1rem;
 }
 
+.prefill-notice {
+  background: #EFF6FF;
+  border: 1px solid #BFDBFE;
+  border-radius: var(--radius-sm);
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem; color: #1D4ED8;
+  margin-bottom: 1rem;
+}
+
 /* ─────────────────────────────────────────────
    SCHEDULE MEETING MODAL
    ───────────────────────────────────────────── */
