@@ -115,14 +115,18 @@ function renderGroupCards(groups) {
       ${bannerHtml}
       <div class="group-card-actions">
         <button class="btn btn-primary btn-sm view-group-btn" data-group="${escHtml(JSON.stringify(g))}">View</button>
+        <button class="btn btn-ghost btn-sm edit-group-btn" data-group="${escHtml(JSON.stringify(g))}">Edit</button>
         <button class="btn btn-ghost btn-sm copy-link-btn" data-link="${link}">Copy Link</button>
-        <button class="btn btn-ghost btn-sm delete-group-btn" data-group-id="${g.id}" data-group-name="${escHtml(g.name)}" title="Delete group">🗑</button>
+        <button class="btn btn-ghost btn-sm delete-group-btn" data-group-id="${g.id}" data-group-name="${escHtml(g.name)}" title="Delete group">✕</button>
       </div>
     </div>`;
   }).join('');
 
   grid.querySelectorAll('.view-group-btn').forEach(btn =>
     btn.addEventListener('click', () => openGroupDetail(JSON.parse(btn.dataset.group)))
+  );
+  grid.querySelectorAll('.edit-group-btn').forEach(btn =>
+    btn.addEventListener('click', () => openEditScheduleModal(JSON.parse(btn.dataset.group)))
   );
   grid.querySelectorAll('.copy-link-btn').forEach(btn =>
     btn.addEventListener('click', () => copyToClipboard(btn.dataset.link, 'Link copied!'))
@@ -337,7 +341,7 @@ function renderMembers() {
       <div style="display:flex;align-items:center;gap:0.5rem;">
         <span class="member-submitted" style="font-size:0.78rem;color:var(--text-muted);">Updated ${relativeTime(m.updated_at || m.created_at)}</span>
         <button class="btn-icon" title="Remove member"
-          onclick="removeMember('${m.id}','${escHtml(m.name)}')"><span class="icon-emoji">🗑</span></button>
+          onclick="removeMember('${m.id}','${escHtml(m.name)}')">✕</button>
       </div>
     </div>`).join('');
 
@@ -1550,15 +1554,83 @@ function filterContacts(query) {
 }
 
 // ── Edit schedule ──────────────────────────────────────────
-function openEditScheduleModal() {
+function openEditScheduleModal(group) {
+  if (group) currentGroup = group;
   if (!currentGroup) return;
   document.getElementById('editScheduleName').value    = currentGroup.name || '';
   document.getElementById('editScheduleDesc').value    = currentGroup.description || '';
   document.getElementById('editScheduleExpected').value =
     (currentGroup.expected_members || []).join('\n');
   document.getElementById('editScheduleError').classList.add('hidden');
+  // Reset picker collapse state
+  const details = document.getElementById('editAddFromContactsDetails');
+  if (details) details.open = false;
+  loadContactsForEditPicker();
   document.getElementById('editScheduleModal').classList.remove('hidden');
   document.getElementById('editScheduleName').focus();
+}
+
+async function loadContactsForEditPicker() {
+  const pickerEl = document.getElementById('editContactPickerList');
+  if (!pickerEl) return;
+  pickerEl.innerHTML = '<p class="text-muted" style="font-size:0.8rem;">Loading contacts...</p>';
+  try {
+    const res = await fetch(`/api/contacts?adminCode=${encodeURIComponent(getAdminCode())}`);
+    const data = await res.json();
+    if (!res.ok || !data.length) {
+      pickerEl.innerHTML = '<p class="text-muted" style="font-size:0.8rem;">No contacts yet. Add some in the Contacts tab.</p>';
+      return;
+    }
+    contactGroups = data;
+    const sorted = [...data].sort((a, b) => a.name.localeCompare(b.name));
+    pickerEl.innerHTML = sorted.map((cg, i) => {
+      const groupId = `ecpg-${i}`;
+      const membersSorted = [...(cg.members || [])].sort((a, b) => a.name.localeCompare(b.name));
+      return `
+      <div class="contact-picker-group">
+        <button type="button" class="contact-picker-group-header" onclick="togglePickerGroup('${groupId}')">
+          <span class="contact-picker-group-name">${escHtml(cg.name)}</span>
+          <span class="contact-picker-group-meta">${membersSorted.length} person${membersSorted.length !== 1 ? 's' : ''}</span>
+          <span class="contact-picker-chevron" id="${groupId}-chevron">▸</span>
+        </button>
+        <div class="contact-picker-group-body hidden" id="${groupId}">
+          ${membersSorted.map(m => `
+            <label class="contact-picker-item">
+              <input type="checkbox"
+                data-name="${escHtml(m.name)}"
+                data-email="${escHtml(m.email || '')}"
+                onchange="syncEditContactsToExpected()" />
+              <span class="contact-picker-name">${escHtml(m.name)}</span>
+              ${m.email ? `<span class="contact-picker-email">${escHtml(m.email)}</span>` : ''}
+            </label>`).join('')}
+        </div>
+      </div>`;
+    }).join('');
+  } catch {
+    pickerEl.innerHTML = '<p class="text-muted" style="font-size:0.8rem;">Could not load contacts.</p>';
+  }
+}
+
+function syncEditContactsToExpected() {
+  const textarea = document.getElementById('editScheduleExpected');
+
+  const entryFor = cb => {
+    const n = cb.dataset.name, e = cb.dataset.email;
+    if (n && e) return `${n} <${e}>`;
+    return e || n;
+  };
+
+  const allContactEntries = new Set(
+    [...document.querySelectorAll('#editContactPickerList input[type="checkbox"]')].map(entryFor)
+  );
+  const checkedEntries = [...document.querySelectorAll('#editContactPickerList input[type="checkbox"]:checked')]
+    .map(entryFor);
+
+  const manualLines = textarea.value.split('\n')
+    .map(s => s.trim())
+    .filter(s => s && !allContactEntries.has(s));
+
+  textarea.value = [...manualLines, ...checkedEntries].join('\n');
 }
 
 function closeEditScheduleModal() {
@@ -1595,11 +1667,17 @@ async function saveScheduleEdits() {
 
     // Update local state
     currentGroup = { ...currentGroup, name, description, expected_members: expected };
-    document.getElementById('detailGroupName').textContent = name;
     closeEditScheduleModal();
     showToast('Schedule updated!', 'success');
-    // Refresh member section in case expected list changed
-    renderMembers();
+    // If we're in detail view, update header + pending section
+    const detailVisible = !document.getElementById('groupDetailView').classList.contains('hidden');
+    if (detailVisible) {
+      document.getElementById('detailGroupName').textContent = name;
+      renderMembers();
+    } else {
+      // Edited from card — refresh the grid
+      await loadGroups();
+    }
   } catch (e) {
     errEl.textContent = e.message; errEl.classList.remove('hidden');
   } finally {

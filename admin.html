@@ -225,6 +225,17 @@
         <p class="text-muted" style="font-size:0.8rem;margin-bottom:0.4rem;">One name or email per line.</p>
         <textarea id="editScheduleExpected" rows="4"></textarea>
       </div>
+      <!-- Add from Contacts picker -->
+      <div class="form-group" style="margin-bottom:0;">
+        <details id="editAddFromContactsDetails">
+          <summary style="cursor:pointer;font-size:0.85rem;font-weight:600;color:var(--primary-dark);padding:0.4rem 0;">
+            <span class="icon-emoji">👥</span> Add from Contacts
+          </summary>
+          <div id="editContactPickerList" style="margin-top:0.6rem;">
+            <p class="text-muted" style="font-size:0.8rem;">Loading contacts...</p>
+          </div>
+        </details>
+      </div>
       <div id="editScheduleError" class="error-msg hidden"></div>
     </div>
     <div class="modal-footer">
