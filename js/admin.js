@@ -34,20 +34,11 @@ function getMembersInAdminTz() {
     showToast(e.message, 'error'); return;
   }
 
-  playLogoSparkle();
   setupGoogleAuth();
   await loadGroups();
   bindUI();
 })();
 
-function playLogoSparkle() {
-  if (sessionStorage.getItem('claire_logo_sparkled_v2')) return;
-  sessionStorage.setItem('claire_logo_sparkled_v2', '1');
-  const icon = document.querySelector('.admin-brand-icon');
-  if (!icon) return;
-  icon.classList.add('brand-sparkle');
-  icon.addEventListener('animationend', () => icon.classList.remove('brand-sparkle'), { once: true });
-}
 
 // ── Load all groups ───────────────────────────────────────
 async function loadGroups() {
