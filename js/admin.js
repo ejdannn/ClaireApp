@@ -1232,22 +1232,53 @@ function renderContactGroupCards() {
   grid.innerHTML = contactGroups.map(cg => {
     const members = cg.members || [];
     const count = members.length;
-    const chips = members.length
-      ? members.map(m => `<span class="contact-name-chip">${escHtml(m.name)}</span>`).join('')
-      : '<span style="color:var(--text-muted);font-size:0.82rem;">No people yet</span>';
+    const cgId = `cg-drop-${cg.id}`;
+    const memberRows = members.length
+      ? members.map((m, idx) => `
+          <div class="contact-card-member-row">
+            <span class="contact-card-member-name">${escHtml(m.name)}</span>
+            ${m.email ? `<span class="contact-card-member-email">${escHtml(m.email)}</span>` : ''}
+            <button class="btn-icon contact-card-remove" title="Remove ${escHtml(m.name)}"
+              onclick="removeContactMember('${cg.id}', ${idx})">✕</button>
+          </div>`).join('')
+      : '<div style="color:var(--text-muted);font-size:0.82rem;padding:0.3rem 0;">No people yet</div>';
+
     return `
     <div class="group-card">
       <div class="group-card-name">${escHtml(cg.name)}</div>
       <div class="group-card-meta" style="margin-bottom:0.65rem;">
         <span class="badge badge-primary">${count} person${count !== 1 ? 's' : ''}</span>
       </div>
-      <div class="contact-name-chips" style="margin-bottom:0.75rem;">${chips}</div>
-      <div class="group-card-actions">
+      <details class="contact-card-details" id="${cgId}">
+        <summary class="contact-card-summary">Show people</summary>
+        <div class="contact-card-member-list">${memberRows}</div>
+      </details>
+      <div class="group-card-actions" style="margin-top:0.75rem;">
         <button class="btn btn-primary btn-sm" onclick="openContactGroupModal(${JSON.stringify(cg).replace(/"/g,'&quot;')})">Edit</button>
-        <button class="btn btn-ghost btn-sm" onclick="deleteContactGroup('${cg.id}','${escHtml(cg.name)}')">Delete</button>
+        <button class="btn btn-ghost btn-sm" onclick="deleteContactGroup('${cg.id}','${escHtml(cg.name)}')">Delete Group</button>
       </div>
     </div>`;
   }).join('');
+}
+
+async function removeContactMember(groupId, memberIdx) {
+  const cg = contactGroups.find(c => c.id === groupId);
+  if (!cg) return;
+  const memberName = cg.members[memberIdx]?.name || 'this person';
+  if (!confirm(`Remove ${memberName} from "${cg.name}"?`)) return;
+
+  const newMembers = cg.members.filter((_, i) => i !== memberIdx);
+  const res = await fetch('/api/contacts', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id: groupId, name: cg.name, members: newMembers, adminCode: getAdminCode() }),
+  });
+  if (!res.ok) { showToast('Failed to remove person.', 'error'); return; }
+  showToast(`${memberName} removed.`, 'success');
+  await loadContactGroups();
+  // Re-open the dropdown they were in
+  const drop = document.getElementById(`cg-drop-${groupId}`);
+  if (drop) drop.open = true;
 }
 
 function openContactGroupModal(group) {
