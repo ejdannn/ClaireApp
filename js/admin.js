@@ -45,7 +45,7 @@ async function loadGroups() {
 
   const { data, error } = await db
     .from('groups')
-    .select('*, members(count)')
+    .select('*, members(email, name)')
     .order('created_at', { ascending: false });
 
   hide('groupsLoading');
@@ -63,20 +63,37 @@ async function loadGroups() {
 function renderGroupCards(groups) {
   const grid = document.getElementById('groupsGrid');
   grid.innerHTML = groups.map(g => {
-    const count    = g.members?.[0]?.count ?? 0;
-    const expected = g.expected_members?.length || 0;
+    const members  = g.members || [];
+    const count    = members.length; // total responders (for badge)
+    const expected = g.expected_members || [];
     const link     = groupLink(g.slug);
 
-    // Progress bar (only shown when expected members are set)
-    const showBar = expected > 0;
-    const pct     = showBar ? Math.min(100, Math.round((count / expected) * 100)) : 0;
+    // Progress bar: count only expected members who have responded
+    const showBar = expected.length > 0;
+    let matchedCount = 0;
+    if (showBar) {
+      const respondedEmails    = new Set(members.map(m => m.email?.toLowerCase()));
+      const respondedUsernames = new Set(members.map(m => emailUsername(m.email || '')).filter(Boolean));
+      const respondedNames     = new Set(members.map(m => m.name?.toLowerCase()));
+      matchedCount = expected.filter(e => {
+        const lower = e.toLowerCase();
+        if (lower.includes('@')) {
+          if (respondedEmails.has(lower)) return true;
+          const uname = emailUsername(lower);
+          return uname ? respondedUsernames.has(uname) : false;
+        }
+        return Array.from(respondedNames).some(n => n.includes(lower) || lower.includes(n));
+      }).length;
+    }
+
+    const pct      = showBar ? Math.min(100, Math.round((matchedCount / expected.length) * 100)) : 0;
     const barColor = pct === 100 ? 'var(--success)' : pct >= 50 ? 'var(--primary)' : 'var(--danger)';
     const progressHtml = showBar ? `
       <div class="group-card-progress">
         <div class="group-card-progress-bar">
           <div class="group-card-progress-fill" style="width:${pct}%;background:${barColor};"></div>
         </div>
-        <span class="group-card-progress-label">${count} / ${expected} responded</span>
+        <span class="group-card-progress-label">${matchedCount} / ${expected.length} responded</span>
       </div>` : '';
 
     return `
