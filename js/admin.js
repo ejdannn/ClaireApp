@@ -151,16 +151,53 @@ function activityDot(dateStr) {
   return '<span class="activity-dot red" title="Updated a long time ago"></span>';
 }
 
+// Returns the username part of an email (before the @)
+function emailUsername(email) {
+  return email.includes('@') ? email.split('@')[0].toLowerCase() : null;
+}
+
+// localStorage helpers for manually dismissed pending entries (per group)
+function getDismissed(groupId) {
+  try { return JSON.parse(localStorage.getItem(`claire_dismissed_${groupId}`) || '[]'); } catch { return []; }
+}
+function addDismissed(groupId, entry) {
+  const list = getDismissed(groupId);
+  if (!list.includes(entry)) list.push(entry);
+  localStorage.setItem(`claire_dismissed_${groupId}`, JSON.stringify(list));
+}
+
+function dismissPending(entry) {
+  addDismissed(currentGroup.id, entry);
+  renderMembers();
+  showToast('Removed from waiting list.', 'success');
+}
+
 function renderPending() {
   const expected = currentGroup?.expected_members || [];
   if (!expected.length) { hide('pendingSection'); return; }
 
-  const respondedEmails = new Set(groupMembers.map(m => m.email.toLowerCase()));
-  const respondedNames  = new Set(groupMembers.map(m => m.name.toLowerCase()));
+  const respondedEmails    = new Set(groupMembers.map(m => m.email.toLowerCase()));
+  // Also collect just the username parts (before @) so a typo in the domain still matches
+  const respondedUsernames = new Set(
+    groupMembers.map(m => emailUsername(m.email)).filter(Boolean)
+  );
+  const respondedNames     = new Set(groupMembers.map(m => m.name.toLowerCase()));
+  const dismissed          = getDismissed(currentGroup.id);
 
   const pending = expected.filter(e => {
+    // Skip anything manually dismissed
+    if (dismissed.includes(e)) return false;
+
     const lower = e.toLowerCase();
-    if (lower.includes('@')) return !respondedEmails.has(lower);
+    if (lower.includes('@')) {
+      // 1. Exact email match
+      if (respondedEmails.has(lower)) return false;
+      // 2. Same username, different domain (e.g. gmail vs hmail typo)
+      const uname = emailUsername(lower);
+      if (uname && respondedUsernames.has(uname)) return false;
+      return true;
+    }
+    // Name-only entry: fuzzy name match
     return !Array.from(respondedNames).some(n => n.includes(lower) || lower.includes(n));
   });
 
@@ -171,7 +208,9 @@ function renderPending() {
   document.getElementById('pendingList').innerHTML = pending.map(p => `
     <div class="pending-item">
       <span class="activity-dot red"></span>
-      <span>${escHtml(p)}</span>
+      <span style="flex:1;">${escHtml(p)}</span>
+      <button class="btn-icon" title="Remove from waiting list"
+        onclick="dismissPending(${JSON.stringify(p)})">✕</button>
     </div>`).join('');
 }
 

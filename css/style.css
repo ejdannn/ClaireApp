@@ -903,6 +903,14 @@ label {
   color: var(--text);
   margin-bottom: 0.35rem;
 }
+.pending-item .btn-icon {
+  color: var(--danger);
+  opacity: 0.55;
+  font-size: 0.75rem;
+  padding: 0.1rem 0.3rem;
+  flex-shrink: 0;
+}
+.pending-item .btn-icon:hover { opacity: 1; }
 
 /* ─────────────────────────────────────────────
    SLOT DETAIL MODAL
