@@ -34,15 +34,15 @@ function getMembersInAdminTz() {
     showToast(e.message, 'error'); return;
   }
 
+  playLogoSparkle();
   setupGoogleAuth();
   await loadGroups();
   bindUI();
-  playLogoSparkle();
 })();
 
 function playLogoSparkle() {
-  if (sessionStorage.getItem('claire_logo_sparkled')) return;
-  sessionStorage.setItem('claire_logo_sparkled', '1');
+  if (sessionStorage.getItem('claire_logo_sparkled_v2')) return;
+  sessionStorage.setItem('claire_logo_sparkled_v2', '1');
   const icon = document.querySelector('.admin-brand-icon');
   if (!icon) return;
   icon.classList.add('brand-sparkle');

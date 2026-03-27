@@ -1001,13 +1001,14 @@ label {
    ───────────────────────────────────────────── */
 @keyframes brandSparkle {
   0%   { transform: scale(1)    rotate(0deg);   filter: brightness(0) invert(65%) sepia(100%) saturate(600%) hue-rotate(350deg) opacity(0.85); }
-  20%  { transform: scale(1.35) rotate(-15deg); filter: brightness(0) invert(75%) sepia(100%) saturate(800%) hue-rotate(330deg) opacity(1); }
-  45%  { transform: scale(1.5)  rotate(20deg);  filter: brightness(0) invert(75%) sepia(100%) saturate(900%) hue-rotate(310deg) opacity(1); }
-  70%  { transform: scale(1.2)  rotate(-8deg);  filter: brightness(0) invert(70%) sepia(100%) saturate(700%) hue-rotate(340deg) opacity(1); }
+  15%  { transform: scale(1.5)  rotate(-20deg); filter: brightness(0) invert(80%) sepia(100%) saturate(1000%) hue-rotate(320deg) opacity(1); }
+  35%  { transform: scale(1.8)  rotate(25deg);  filter: brightness(0) invert(80%) sepia(100%) saturate(1200%) hue-rotate(300deg) opacity(1); }
+  55%  { transform: scale(1.4)  rotate(-10deg); filter: brightness(0) invert(75%) sepia(100%) saturate(900%) hue-rotate(330deg) opacity(1); }
+  75%  { transform: scale(1.6)  rotate(12deg);  filter: brightness(0) invert(78%) sepia(100%) saturate(1000%) hue-rotate(315deg) opacity(1); }
   100% { transform: scale(1)    rotate(0deg);   filter: brightness(0) invert(65%) sepia(100%) saturate(600%) hue-rotate(350deg) opacity(0.85); }
 }
 .brand-sparkle {
-  animation: brandSparkle 0.9s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  animation: brandSparkle 1.2s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
 
 /* ─────────────────────────────────────────────
