@@ -1006,21 +1006,6 @@ label {
   animation: slotCopyFlash 0.45s ease forwards;
 }
 
-/* Water drop ripple on click */
-.avail-slot { position: relative; overflow: hidden; }
-@keyframes slotRipple {
-  0%   { transform: translate(-50%, -50%) scale(0); opacity: 0.55; }
-  100% { transform: translate(-50%, -50%) scale(3);  opacity: 0; }
-}
-.slot-ripple {
-  position: absolute;
-  top: 50%; left: 50%;
-  width: 100%; height: 100%;
-  background: rgba(255, 255, 255, 0.55);
-  border-radius: 50%;
-  pointer-events: none;
-  animation: slotRipple 0.38s ease-out forwards;
-}
 
 /* Member cards slide in */
 @keyframes memberSlideIn {

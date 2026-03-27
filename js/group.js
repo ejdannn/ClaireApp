@@ -246,7 +246,6 @@ function buildDesktopGrid() {
     const d = +slot.dataset.day, s = +slot.dataset.slot;
     dragAction = availability[d].has(s) ? 'remove' : 'add';
     toggleSlot(d, s);
-    addSlotRipple(slot);
     refreshDesktopGrid();
   });
 
@@ -380,12 +379,6 @@ function closeCopyPopover() {
   if (activeCopyPopover) { activeCopyPopover.remove(); activeCopyPopover = null; }
 }
 
-function addSlotRipple(el) {
-  const ripple = document.createElement('span');
-  ripple.className = 'slot-ripple';
-  el.appendChild(ripple);
-  ripple.addEventListener('animationend', () => ripple.remove(), { once: true });
-}
 
 function flashCopiedDay(day) {
   document.querySelectorAll(`.avail-slot[data-day="${day}"].on`).forEach((el, i) => {
