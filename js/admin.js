@@ -117,7 +117,7 @@ function renderGroupCards(groups) {
         <button class="btn btn-primary btn-sm view-group-btn" data-group="${escHtml(JSON.stringify(g))}">View</button>
         <button class="btn btn-ghost btn-sm edit-group-btn" data-group="${escHtml(JSON.stringify(g))}">Edit</button>
         <button class="btn btn-ghost btn-sm copy-link-btn" data-link="${link}">Copy Link</button>
-        <button class="btn btn-ghost btn-sm delete-group-btn" data-group-id="${g.id}" data-group-name="${escHtml(g.name)}" title="Delete group">✕</button>
+        <button class="btn-icon btn-danger delete-group-btn" data-group-id="${g.id}" data-group-name="${escHtml(g.name)}" title="Delete group" style="font-size:1.1rem;padding:0.3rem 0.5rem;">✕</button>
       </div>
     </div>`;
   }).join('');
@@ -310,7 +310,7 @@ function renderPending() {
         ${email ? `<div style="font-size:0.78rem;color:var(--text-muted);">${escHtml(email)}</div>` : ''}
         ${!name && !email ? `<div>${escHtml(p)}</div>` : ''}
       </div>
-      <button class="btn-icon" title="Remove from waiting list"
+      <button class="btn-icon btn-danger" title="Remove from waiting list"
         onclick="dismissPending(${JSON.stringify(p)})">✕</button>
     </div>`;
   }).join('');
@@ -340,7 +340,7 @@ function renderMembers() {
       </div>
       <div style="display:flex;align-items:center;gap:0.5rem;">
         <span class="member-submitted" style="font-size:0.78rem;color:var(--text-muted);">Updated ${relativeTime(m.updated_at || m.created_at)}</span>
-        <button class="btn-icon" title="Remove member"
+        <button class="btn-icon btn-danger" title="Remove member"
           onclick="removeMember('${m.id}','${escHtml(m.name)}')">✕</button>
       </div>
     </div>`).join('');
@@ -1252,7 +1252,7 @@ function renderContactGroupCards() {
           <div class="contact-card-member-row">
             <span class="contact-card-member-name">${escHtml(m.name)}</span>
             ${m.email ? `<span class="contact-card-member-email">${escHtml(m.email)}</span>` : ''}
-            <button class="btn-icon contact-card-remove" title="Remove ${escHtml(m.name)}"
+            <button class="btn-icon btn-danger contact-card-remove" title="Remove ${escHtml(m.name)}"
               onclick="removeContactMember('${cg.id}', ${idx})">✕</button>
           </div>`).join('')
       : '<div style="color:var(--text-muted);font-size:0.82rem;padding:0.3rem 0;">No people yet</div>';
@@ -1446,7 +1446,7 @@ function addContactMemberRow(name = '', email = '') {
   row.innerHTML = `
     <input type="text" class="contact-member-name" placeholder="Name" value="${escHtml(name)}" />
     <input type="email" class="contact-member-email" placeholder="Email (optional)" value="${escHtml(email)}" />
-    <button class="btn-icon contact-member-remove" title="Remove">✕</button>`;
+    <button class="btn-icon btn-danger contact-member-remove" title="Remove">✕</button>`;
   row.querySelector('.contact-member-remove').addEventListener('click', () => row.remove());
   rows.appendChild(row);
 }
