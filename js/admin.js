@@ -73,7 +73,7 @@ function renderGroupCards(groups) {
         &nbsp; Created ${relativeTime(g.created_at)}
       </div>
       <div class="group-card-actions">
-        <button class="btn btn-primary btn-sm view-group-btn" data-group='${JSON.stringify(g)}'>View</button>
+        <button class="btn btn-primary btn-sm view-group-btn" data-group="${escHtml(JSON.stringify(g))}">View</button>
         <button class="btn btn-ghost btn-sm copy-link-btn" data-link="${link}">Copy Link</button>
         <button class="btn btn-ghost btn-sm delete-group-btn" data-group-id="${g.id}" data-group-name="${escHtml(g.name)}" title="Delete group">🗑</button>
       </div>
