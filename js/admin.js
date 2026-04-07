@@ -875,7 +875,7 @@ function renderSharedTasks(tasks) {
   let html = '';
   groups.forEach((groupTasks, listId) => {
     if (!groupTasks.length) return;
-    const listName  = listId ? (allTaskLists.find(l => l.id === listId)?.name || 'Unknown') : 'General';
+    const listName  = listId ? (allTaskLists.find(l => l.id === listId)?.name || 'Unknown') : 'No Folder';
     const colKey    = listId || 'null';
     const collapsed = collapsedLists.has(colKey);
     const sorted = [...groupTasks].sort(
@@ -895,8 +895,8 @@ function renderSharedTasks(tasks) {
           <button class="btn btn-ghost btn-sm task-group-copy-btn"
             onclick="event.stopPropagation();copyListSummary('${listId || ''}')" title="Copy summary">Copy</button>
           ${done.length ? `<button class="btn btn-danger-ghost btn-sm"
-            onclick="event.stopPropagation();clearCompletedTasks('${listId || ''}')" title="Delete completed tasks in this list">Clear done</button>` : ''}
-          ${listId ? `<button class="btn-icon text-danger" onclick="event.stopPropagation();deleteList('${listId}')" title="Delete list">✕</button>` : ''}
+            onclick="event.stopPropagation();clearCompletedTasks('${listId || ''}')" title="Delete completed tasks in this folder">Clear done</button>` : ''}
+          ${listId ? `<button class="btn-icon text-danger" onclick="event.stopPropagation();deleteList('${listId}')" title="Delete folder">✕</button>` : ''}
         </div>
         <div class="task-list">
           ${active.map(t => taskCardHtml(t)).join('')}
@@ -989,7 +989,7 @@ async function openTaskDetail(taskId) {
     const fullDate = safeDate(t.deadline).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
     meta.push(`<span class="task-deadline-pill ${deadlineClass(t.deadline)}" title="${fullDate}">Due ${fullDate}</span>`);
   }
-  if (t.todo_lists?.name) meta.push(`<span class="task-tag">List: ${escHtml(t.todo_lists.name)}</span>`);
+  if (t.todo_lists?.name) meta.push(`<span class="task-tag">Folder: ${escHtml(t.todo_lists.name)}</span>`);
   document.getElementById('taskDetailMeta').innerHTML = meta.join('');
   document.getElementById('taskDetailDesc').textContent = t.description || '';
 
@@ -1076,7 +1076,7 @@ function openTaskModal(task = null) {
 
   // Populate list select
   const sel = document.getElementById('taskListSelect');
-  sel.innerHTML = '<option value="">— No list —</option>' +
+  sel.innerHTML = '<option value="">— No folder —</option>' +
     allTaskLists.map(l => `<option value="${l.id}" ${task?.list_id === l.id ? 'selected' : ''}>${escHtml(l.name)}</option>`).join('');
 
   // Render existing assignees
@@ -1234,7 +1234,7 @@ async function clearCompletedTasks(listId) {
     return;
   }
 
-  const scope = listId === null ? 'all lists' : (listId ? (allTaskLists.find(l => l.id === listId)?.name || 'this list') : 'General');
+  const scope = listId === null ? 'all folders' : (listId ? (allTaskLists.find(l => l.id === listId)?.name || 'this folder') : 'No Folder');
   if (!confirm(`Delete ${toDelete.length} completed task${toDelete.length > 1 ? 's' : ''} from ${scope}? This cannot be undone.`)) return;
 
   const ids = toDelete.map(t => t.id);
@@ -1265,7 +1265,7 @@ function renderListManagerRows() {
   const container = document.getElementById('listManagerRows');
   if (!container) return;
   if (!allTaskLists.length) {
-    container.innerHTML = '<p class="text-muted text-sm" style="text-align:center;padding:0.5rem 0;">No lists yet.</p>';
+    container.innerHTML = '<p class="text-muted text-sm" style="text-align:center;padding:0.5rem 0;">No folders yet.</p>';
     return;
   }
   container.innerHTML = allTaskLists.map(l => `
@@ -1273,7 +1273,7 @@ function renderListManagerRows() {
       <input class="list-manager-input" id="list-name-${l.id}" value="${escHtml(l.name)}"
         onkeydown="if(event.key==='Enter'){event.preventDefault();renameList('${l.id}');}if(event.key==='Escape'){this.value=allTaskLists.find(x=>x.id==='${l.id}')?.name||'';}" />
       <button class="btn btn-secondary btn-sm" onclick="renameList('${l.id}')">Save</button>
-      <button class="btn-icon text-danger" onclick="deleteList('${l.id}')" title="Delete list">✕</button>
+      <button class="btn-icon text-danger" onclick="deleteList('${l.id}')" title="Delete folder">✕</button>
     </div>`).join('');
 }
 
@@ -1340,7 +1340,7 @@ async function saveInlineList() {
     opt.selected = true;
     sel.appendChild(opt);
     toggleInlineNewList(false);
-    showToast(`List "${name}" created!`, 'success');
+    showToast(`Folder "${name}" created!`, 'success');
   } catch (e) {
     showToast(e.message, 'error');
   } finally {
@@ -1367,7 +1367,7 @@ async function saveList() {
     const newList = await res.json();
     allTaskLists.push(newList);
     input.value = '';
-    showToast(`List "${name}" created!`, 'success');
+    showToast(`Folder "${name}" created!`, 'success');
     renderListManagerRows();
     applyTaskFilters();
   } catch (e) {
@@ -1381,16 +1381,16 @@ async function saveList() {
 
 async function deleteList(id) {
   const list = allTaskLists.find(l => l.id === id);
-  if (!confirm(`Delete list "${list?.name}"? Tasks in it will move to General.`)) return;
+  if (!confirm(`Delete folder "${list?.name}"? Tasks in it will become unfoldered.`)) return;
   const res = await fetch('/api/task-lists', {
     method: 'DELETE',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ id, adminCode: getAdminCode() }),
   });
-  if (!res.ok) { showToast('Failed to delete list.', 'error'); return; }
+  if (!res.ok) { showToast('Failed to delete folder.', 'error'); return; }
   allTaskLists = allTaskLists.filter(l => l.id !== id);
   allTasks.forEach(t => { if (t.list_id === id) t.list_id = null; });
-  showToast('List deleted.', 'success');
+  showToast('Folder deleted.', 'success');
   renderListManagerRows();
   applyTaskFilters();
 }
@@ -1407,7 +1407,7 @@ function formatTaskLine(t) {
 }
 
 function copyListSummary(listId) {
-  const listName = listId ? (allTaskLists.find(l => l.id === listId)?.name || 'General') : 'General';
+  const listName = listId ? (allTaskLists.find(l => l.id === listId)?.name || 'No Folder') : 'No Folder';
   const tasks = allTasks.filter(t =>
     !t.is_private && t.status !== 'complete' && (t.list_id || null) === (listId || null)
   );
@@ -1431,7 +1431,7 @@ function generateTaskSummary() {
 
   const byList = new Map();
   allTaskLists.forEach(l => byList.set(l.id, { name: l.name, tasks: [] }));
-  byList.set(null, { name: 'General', tasks: [] });
+  byList.set(null, { name: 'No Folder', tasks: [] });
 
   shared.forEach(t => {
     const key = t.list_id && byList.has(t.list_id) ? t.list_id : null;
