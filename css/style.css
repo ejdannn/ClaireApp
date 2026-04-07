@@ -1533,6 +1533,73 @@ details[open] .contact-card-summary::before { content: '▾'; }
 /* ── Text danger ───────────────────────────────────────── */
 .text-danger { color: var(--danger); }
 
+/* ── Status badge on admin task cards ──────────────────── */
+.task-status-badge {
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  cursor: pointer;
+  background: var(--surface);
+  color: var(--text-muted);
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+.task-status-badge:hover { border-color: var(--primary); color: var(--primary); }
+.task-status-badge.status-inprogress { border-color: var(--primary-dark); background: var(--primary-pale); color: var(--primary-dark); }
+.task-status-badge.status-complete   { border-color: var(--success); background: #dcfce7; color: #166534; }
+.task-tag.status-inprogress { background: var(--primary-pale); color: var(--primary-darker, var(--primary-dark)); }
+.task-tag.status-complete   { background: #dcfce7; color: #166534; }
+
+/* ── Segmented status buttons (admin detail modal) ──────── */
+.task-status-segmented {
+  display: flex;
+  gap: 0.5rem;
+}
+.task-status-seg-btn {
+  flex: 1;
+  padding: 0.5rem 0.75rem;
+  border: 2px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 0.825rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: center;
+}
+.task-status-seg-btn:hover { border-color: var(--primary-light); color: var(--text); }
+.task-status-seg-btn.active { color: var(--text); }
+.task-status-seg-btn.active.status-inprogress { border-color: var(--primary-dark); background: var(--primary-pale); color: var(--primary-dark); }
+.task-status-seg-btn.active.status-complete   { border-color: var(--success); background: #dcfce7; color: #166534; }
+.task-status-seg-btn.active:not(.status-inprogress):not(.status-complete) { border-color: var(--border-focus); background: var(--surface2); color: var(--text); }
+
+/* ── Public status buttons (on assigned task cards) ─────── */
+.pub-status-btns { display: flex; gap: 0.35rem; flex-wrap: wrap; }
+.pub-status-btn {
+  padding: 0.25rem 0.6rem;
+  border: 1.5px solid var(--border);
+  border-radius: 20px;
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.pub-status-btn:hover { border-color: var(--primary-light); color: var(--text); }
+.pub-status-btn.active.pub-status-todo        { border-color: var(--border-focus); background: var(--surface2); color: var(--text); }
+.pub-status-btn.active.pub-status-in_progress { border-color: var(--primary-dark); background: var(--primary-pale); color: var(--primary-dark); }
+.pub-status-btn.active.pub-status-complete    { border-color: var(--success); background: #dcfce7; color: #166534; }
+
 /* ── Task card arrow (clickable hint) ──────────────────── */
 .task-card-arrow {
   color: var(--text-light);

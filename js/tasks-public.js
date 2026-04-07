@@ -171,40 +171,44 @@ function renderMyTasks() {
   </div>`;
 }
 
+const PUB_STATUS_LABELS = { todo: 'To Do', in_progress: 'In Progress', complete: 'Complete' };
+
 function myTaskCardHtml(t) {
   const myAssignment = (t.task_assignments || []).find(a => a.assignee_email === currentUserEmail);
-  const isDone = !!myAssignment?.completed_at;
   const dClass = deadlineClass(t.deadline);
+  const s = t.status;
   return `
-    <div class="task-pub-card ${isDone ? 'task-card-done' : ''} ${dClass} task-card-mine"
+    <div class="task-pub-card ${s === 'complete' ? 'task-card-done' : ''} ${dClass} task-card-mine"
          onclick="openPubTaskDetail('${t.id}')">
-      <div style="flex-shrink:0;">
-        <input type="checkbox" class="task-pub-check" ${isDone ? 'checked' : ''}
-          onclick="event.stopPropagation()"
-          onchange="toggleMyTask('${t.id}', this.checked)" />
-      </div>
       <div style="flex:1;min-width:0;">
-        <div class="task-card-title ${isDone ? 'task-done' : ''}">${escHtml(t.title)}</div>
+        <div class="task-card-title ${s === 'complete' ? 'task-done' : ''}">${escHtml(t.title)}</div>
         <div class="task-card-meta" style="margin-top:0.25rem;">
           ${t.department ? `<span class="task-tag">${escHtml(t.department)}</span>` : ''}
           ${t.deadline   ? `<span class="task-deadline-pill ${dClass}">${deadlineLabel(t.deadline)}</span>` : ''}
           ${t.description ? `<span class="task-tag" style="background:var(--surface2);color:var(--text-muted);">Has details</span>` : ''}
+        </div>
+        <div class="pub-status-btns" onclick="event.stopPropagation()" style="margin-top:0.5rem;">
+          ${['todo','in_progress','complete'].map(st => `
+            <button class="pub-status-btn ${s === st ? 'active pub-status-' + st : ''}"
+              onclick="setPubTaskStatus('${t.id}', '${st}')">
+              ${st === 'complete' ? '✓' : st === 'in_progress' ? '▶' : '○'} ${PUB_STATUS_LABELS[st]}
+            </button>`).join('')}
         </div>
       </div>
       <div class="task-card-arrow">›</div>
     </div>`;
 }
 
-async function toggleMyTask(taskId, checked) {
+async function setPubTaskStatus(taskId, newStatus) {
   if (!currentIdToken) { showToast('Please sign in first.', 'error'); return; }
   const res = await fetch('/api/task-action', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: checked ? 'complete' : 'uncomplete', taskId, idToken: currentIdToken }),
+    body: JSON.stringify({ action: 'status', taskId, newStatus, idToken: currentIdToken }),
   });
   const d = await res.json();
   if (!res.ok) { showToast(d.error || 'Failed to update.', 'error'); return; }
-  showToast(checked ? 'Marked complete!' : 'Marked incomplete.', 'success');
+  showToast(`Status: ${PUB_STATUS_LABELS[newStatus]}`, 'success');
   await loadPublicTasks();
 }
 
@@ -219,7 +223,6 @@ function renderAllTasks() {
     return;
   }
 
-  const statusLabels = { todo: 'To Do', in_progress: 'In Progress', complete: 'Complete' };
   el.innerHTML = `<div class="task-pub-list">${sorted.map(t => {
     const isMine = (t.task_assignments || []).some(a => a.assignee_email === currentUserEmail);
     const dClass = deadlineClass(t.deadline);
@@ -231,7 +234,7 @@ function renderAllTasks() {
           <div class="task-card-meta" style="margin-top:0.25rem;">
             ${t.department ? `<span class="task-tag">${escHtml(t.department)}</span>` : ''}
             ${t.deadline   ? `<span class="task-deadline-pill ${dClass}">${deadlineLabel(t.deadline)}</span>` : ''}
-            <span class="task-tag" style="background:var(--surface2);color:var(--text-muted);">${statusLabels[t.status] || t.status}</span>
+            ${t.status !== 'todo' ? `<span class="task-tag" style="background:var(--surface2);color:var(--text-muted);">${PUB_STATUS_LABELS[t.status] || t.status}</span>` : ''}
             ${(t.task_assignments||[]).map(a =>
               `<span class="task-chip ${a.assignee_email===currentUserEmail?'task-chip-me':''}">${escHtml(a.assignee_name||a.assignee_email)}</span>`
             ).join('')}
@@ -264,13 +267,14 @@ async function openPubTaskDetail(taskId) {
 
   if (myAssignment && currentUserEmail) {
     mySection.classList.remove('hidden');
-    const isDone = !!myAssignment.completed_at;
     document.getElementById('pubAssignmentStatus').innerHTML = `
-      <label style="display:flex;align-items:center;gap:0.6rem;cursor:pointer;font-size:0.9rem;">
-        <input type="checkbox" class="task-pub-check" ${isDone ? 'checked' : ''}
-          onchange="toggleMyTask('${t.id}', this.checked)" />
-        <span>${isDone ? 'Marked as complete' : 'Mark as complete'}</span>
-      </label>`;
+      <div class="pub-status-btns">
+        ${['todo','in_progress','complete'].map(st => `
+          <button class="pub-status-btn ${t.status === st ? 'active pub-status-' + st : ''}"
+            onclick="setPubTaskStatus('${t.id}', '${st}')">
+            ${st === 'complete' ? '✓' : st === 'in_progress' ? '▶' : '○'} ${PUB_STATUS_LABELS[st]}
+          </button>`).join('')}
+      </div>`;
     commentBox.classList.remove('hidden');
   } else {
     mySection.classList.add('hidden');

@@ -698,34 +698,40 @@ function renderSharedTasks(tasks) {
   body.innerHTML = html || '<p class="text-muted text-sm">No tasks yet.</p>';
 }
 
+const STATUS_LABELS = { todo: 'To Do', in_progress: 'In Progress', complete: 'Complete' };
+const STATUS_COLORS = { todo: '', in_progress: 'status-inprogress', complete: 'status-complete' };
+
 function taskCardHtml(t) {
   const assignments = t.task_assignments || [];
   const dClass = deadlineClass(t.deadline);
-  const statusColors = { todo: 'var(--text-muted)', in_progress: 'var(--primary-dark)', complete: 'var(--success)' };
-  const statusLabels = { todo: 'To Do', in_progress: 'In Progress', complete: 'Complete' };
 
   return `
     <div class="task-card ${t.status === 'complete' ? 'task-card-done' : ''} ${dClass}"
          onclick="openTaskDetail('${t.id}')">
-      <div class="task-card-left">
-        <select class="task-status-select" style="color:${statusColors[t.status] || 'inherit'};"
-          onclick="event.stopPropagation()"
-          onchange="updateTaskStatus('${t.id}', this.value)">
-          <option value="todo"        ${t.status==='todo'        ?'selected':''}>To Do</option>
-          <option value="in_progress" ${t.status==='in_progress' ?'selected':''}>In Progress</option>
-          <option value="complete"    ${t.status==='complete'    ?'selected':''}>Complete</option>
-        </select>
+      <div class="task-card-left" onclick="event.stopPropagation()">
+        <div class="task-status-badge ${STATUS_COLORS[t.status] || ''}" title="Click to change status"
+             onclick="cycleTaskStatus(event, '${t.id}', '${t.status}')">
+          ${t.status === 'complete' ? '✓' : t.status === 'in_progress' ? '▶' : '○'}
+        </div>
       </div>
       <div class="task-card-body">
         <div class="task-card-title ${t.status === 'complete' ? 'task-done' : ''}">${escHtml(t.title)}</div>
         <div class="task-card-meta">
+          ${t.status !== 'todo' ? `<span class="task-tag ${STATUS_COLORS[t.status]}">${STATUS_LABELS[t.status]}</span>` : ''}
           ${t.department ? `<span class="task-tag">${escHtml(t.department)}</span>` : ''}
           ${t.deadline   ? `<span class="task-deadline-pill ${dClass}">${deadlineLabel(t.deadline)}</span>` : ''}
-          ${assignments.length ? `<span class="task-assignee-chips">${assignments.map(a =>
-            `<span class="task-chip">${escHtml(a.assignee_name || a.assignee_email)}</span>`).join('')}</span>` : ''}
+          ${assignments.length ? assignments.map(a =>
+            `<span class="task-chip">${escHtml(a.assignee_name || a.assignee_email)}</span>`).join('') : ''}
         </div>
       </div>
     </div>`;
+}
+
+function cycleTaskStatus(e, id, currentStatus) {
+  e.stopPropagation();
+  const order = ['todo', 'in_progress', 'complete'];
+  const next = order[(order.indexOf(currentStatus) + 1) % order.length];
+  updateTaskStatus(id, next);
 }
 
 async function updateTaskStatus(id, status) {
@@ -738,20 +744,29 @@ async function updateTaskStatus(id, status) {
 }
 
 // ── Task detail modal ─────────────────────────────────────
+let detailTaskId = null;
+
 async function openTaskDetail(taskId) {
   const t = allTasks.find(t => t.id === taskId);
   if (!t) return;
+  detailTaskId = taskId;
 
   document.getElementById('taskDetailTitle').textContent = t.title;
 
-  // Meta pills
+  // Segmented status buttons
+  const statuses = ['todo', 'in_progress', 'complete'];
+  document.getElementById('taskDetailStatusBtns').innerHTML = statuses.map(s => `
+    <button class="task-status-seg-btn ${t.status === s ? 'active ' + STATUS_COLORS[s] : ''}"
+      onclick="adminSetTaskStatus('${t.id}', '${s}')">
+      ${s === 'complete' ? '✓ ' : s === 'in_progress' ? '▶ ' : '○ '}${STATUS_LABELS[s]}
+    </button>`).join('');
+
+  // Meta pills (no status — it's shown above)
   const meta = [];
-  if (t.status) meta.push(`<span class="task-tag">${t.status.replace('_',' ')}</span>`);
   if (t.department) meta.push(`<span class="task-tag">${escHtml(t.department)}</span>`);
   if (t.deadline) meta.push(`<span class="task-deadline-pill ${deadlineClass(t.deadline)}">${deadlineLabel(t.deadline)}</span>`);
   if (t.todo_lists?.name) meta.push(`<span class="task-tag">📋 ${escHtml(t.todo_lists.name)}</span>`);
   document.getElementById('taskDetailMeta').innerHTML = meta.join('');
-
   document.getElementById('taskDetailDesc').textContent = t.description || '';
 
   const assignments = t.task_assignments || [];
@@ -759,7 +774,7 @@ async function openTaskDetail(taskId) {
     ? assignments.map(a => `
         <div class="task-detail-assignee">
           <div class="task-chip-avatar">${(a.assignee_name || a.assignee_email)[0].toUpperCase()}</div>
-          <div>
+          <div style="flex:1;">
             <div class="text-sm" style="font-weight:600;">${escHtml(a.assignee_name || a.assignee_email)}</div>
             ${a.assignee_name ? `<div class="text-sm text-muted">${escHtml(a.assignee_email)}</div>` : ''}
           </div>
@@ -773,30 +788,55 @@ async function openTaskDetail(taskId) {
     if (confirm(`Delete "${t.title}"?`)) deleteTask(t.id);
   };
   document.getElementById('editTaskDetailBtn').onclick = () => { closeTaskDetail(); openTaskModal(t); };
-
-  // Load comments + history
-  document.getElementById('taskDetailComments').innerHTML = '<span class="text-muted text-sm">Loading…</span>';
-  document.getElementById('taskDetailHistory').innerHTML = '';
+  document.getElementById('adminCommentInput').value = '';
 
   show('taskDetailModal');
+  loadDetailComments(taskId);
+}
 
-  const [commentsRes, historyRes] = await Promise.all([
-    fetch(`/api/task-comments?taskId=${taskId}`),
-    fetch(`/api/tasks?adminCode=${encodeURIComponent(getAdminCode())}`),
-  ]);
-
-  const comments = commentsRes.ok ? await commentsRes.json() : [];
+async function loadDetailComments(taskId) {
+  document.getElementById('taskDetailComments').innerHTML = '<span class="text-muted text-sm">Loading…</span>';
+  const res = await fetch(`/api/task-comments?taskId=${taskId}`);
+  const comments = res.ok ? await res.json() : [];
   document.getElementById('taskDetailComments').innerHTML = comments.length
     ? comments.map(c => `
         <div class="task-comment">
           <div class="task-comment-author">${escHtml(c.author_name || c.author_email)}</div>
           <div class="task-comment-body">${escHtml(c.body)}</div>
-          <div class="task-comment-time text-muted text-sm">${new Date(c.created_at).toLocaleString()}</div>
+          <div class="task-comment-time">${new Date(c.created_at).toLocaleString()}</div>
         </div>`).join('')
     : '<span class="text-muted text-sm">No comments yet.</span>';
 }
 
-function closeTaskDetail() { hide('taskDetailModal'); }
+async function adminSetTaskStatus(id, status) {
+  await updateTaskStatus(id, status);
+  // Re-render segmented buttons immediately
+  const statuses = ['todo', 'in_progress', 'complete'];
+  document.getElementById('taskDetailStatusBtns').innerHTML = statuses.map(s => `
+    <button class="task-status-seg-btn ${status === s ? 'active ' + STATUS_COLORS[s] : ''}"
+      onclick="adminSetTaskStatus('${id}', '${s}')">
+      ${s === 'complete' ? '✓ ' : s === 'in_progress' ? '▶ ' : '○ '}${STATUS_LABELS[s]}
+    </button>`).join('');
+}
+
+async function submitAdminComment() {
+  const input = document.getElementById('adminCommentInput');
+  const body  = input.value.trim();
+  if (!body || !detailTaskId) return;
+  const btn = input.nextElementSibling;
+  btn.disabled = true;
+  const res = await fetch('/api/task-comments', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ taskId: detailTaskId, commentBody: body, adminCode: getAdminCode() }),
+  });
+  btn.disabled = false;
+  if (!res.ok) { showToast('Failed to post comment.', 'error'); return; }
+  input.value = '';
+  loadDetailComments(detailTaskId);
+}
+
+function closeTaskDetail() { hide('taskDetailModal'); detailTaskId = null; }
 
 // ── Task create/edit modal ────────────────────────────────
 function openTaskModal(task = null) {

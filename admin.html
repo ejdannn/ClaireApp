@@ -358,17 +358,32 @@
       <button class="btn-icon" onclick="closeTaskDetail()">✕</button>
     </div>
     <div class="modal-body">
+
+      <!-- Status control — obvious segmented buttons -->
+      <div style="margin-bottom:1.25rem;">
+        <div class="text-sm" style="font-weight:600;margin-bottom:0.5rem;">Status</div>
+        <div class="task-status-segmented" id="taskDetailStatusBtns"></div>
+      </div>
+
       <div id="taskDetailMeta" style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-bottom:1rem;"></div>
       <div id="taskDetailDesc" class="text-muted text-sm" style="margin-bottom:1rem;white-space:pre-wrap;"></div>
+
       <div style="margin-bottom:1rem;">
         <div class="text-sm" style="font-weight:600;margin-bottom:0.4rem;">Assignees</div>
         <div id="taskDetailAssignees"></div>
       </div>
-      <div>
-        <div class="text-sm" style="font-weight:600;margin-bottom:0.5rem;">Comments &amp; History</div>
-        <div id="taskDetailComments" style="max-height:200px;overflow-y:auto;"></div>
-        <div id="taskDetailHistory" style="max-height:120px;overflow-y:auto;margin-top:0.5rem;"></div>
+
+      <div style="margin-bottom:1rem;">
+        <div class="text-sm" style="font-weight:600;margin-bottom:0.5rem;">Comments</div>
+        <div id="taskDetailComments" style="max-height:180px;overflow-y:auto;margin-bottom:0.6rem;"></div>
+        <div style="display:flex;gap:0.5rem;">
+          <input type="text" id="adminCommentInput" placeholder="Add a comment…"
+            style="flex:1;padding:0.45rem 0.7rem;border:1px solid var(--border);border-radius:8px;font-size:0.875rem;font-family:inherit;"
+            onkeydown="if(event.key==='Enter')submitAdminComment()" />
+          <button class="btn btn-sm btn-primary" onclick="submitAdminComment()">Send</button>
+        </div>
       </div>
+
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost btn-sm" style="color:var(--danger);" id="deleteTaskBtn">Delete Task</button>

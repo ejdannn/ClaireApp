@@ -131,5 +131,58 @@ export async function onRequestPost(context) {
     return new Response(JSON.stringify(Array.isArray(data) ? data[0] : data), { status: 200, headers: CORS });
   }
 
+  // ── Change status (assignees only) ────────────────────
+  if (action === 'status') {
+    if (!isAssigned) {
+      return new Response(JSON.stringify({ error: 'Only assignees can change status.' }), { status: 403, headers: CORS });
+    }
+    const { newStatus } = body;
+    const allowed = ['todo', 'in_progress', 'complete'];
+    if (!allowed.includes(newStatus)) {
+      return new Response(JSON.stringify({ error: 'Invalid status.' }), { status: 400, headers: CORS });
+    }
+
+    // If marking complete, set completed_at on their assignment
+    if (newStatus === 'complete') {
+      await fetch(
+        `${sb.url}/rest/v1/task_assignments?task_id=eq.${taskId}&assignee_email=eq.${encodeURIComponent(email)}`,
+        {
+          method: 'PATCH',
+          headers: { ...sb.headers, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ completed_at: new Date().toISOString() }),
+        }
+      );
+    } else {
+      await fetch(
+        `${sb.url}/rest/v1/task_assignments?task_id=eq.${taskId}&assignee_email=eq.${encodeURIComponent(email)}`,
+        {
+          method: 'PATCH',
+          headers: { ...sb.headers, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ completed_at: null }),
+        }
+      );
+    }
+
+    // Update the task status itself
+    await fetch(`${sb.url}/rest/v1/tasks?id=eq.${taskId}`, {
+      method: 'PATCH',
+      headers: { ...sb.headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: newStatus, updated_at: new Date().toISOString() }),
+    });
+
+    await fetch(`${sb.url}/rest/v1/task_history`, {
+      method: 'POST',
+      headers: { ...sb.headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        task_id: taskId,
+        changed_by: email,
+        change_type: 'status_changed',
+        new_value: newStatus,
+      }),
+    });
+
+    return new Response(JSON.stringify({ success: true }), { status: 200, headers: CORS });
+  }
+
   return new Response(JSON.stringify({ error: 'Unknown action.' }), { status: 400, headers: CORS });
 }
