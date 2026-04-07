@@ -259,12 +259,25 @@
         </div>
       </div>
 
+      <!-- Search + filter bar -->
+      <div class="task-toolbar">
+        <input type="text" id="taskSearchInput" placeholder="Search tasks, people, departments…"
+          oninput="applyTaskFilters()" class="task-search-input" />
+        <div class="filter-chips" id="taskFilterChips">
+          <button class="filter-chip active" data-status="all"         onclick="setTaskStatusFilter(this)">All</button>
+          <button class="filter-chip"        data-status="todo"        onclick="setTaskStatusFilter(this)">To Do</button>
+          <button class="filter-chip"        data-status="in_progress" onclick="setTaskStatusFilter(this)">In Progress</button>
+          <button class="filter-chip"        data-status="complete"    onclick="setTaskStatusFilter(this)">Complete</button>
+        </div>
+      </div>
+
       <div id="tasksLoading" class="loading-state">
         <div class="spinner spinner-dark"></div>
         <span>Loading tasks…</span>
       </div>
 
       <div id="tasksBody" class="hidden"></div>
+      <div id="tasksNoResults" class="hidden" style="text-align:center;padding:2rem;color:var(--text-muted);">No tasks match your search.</div>
 
       <div id="tasksEmpty" class="empty-state hidden">
         <div class="empty-icon" style="font-size:2rem;font-weight:700;color:var(--primary);">✓</div>

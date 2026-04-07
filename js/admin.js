@@ -610,14 +610,23 @@ async function loadTasks() {
   allTaskLists = await listsRes.json();
 
   const privateTasks = allTasks.filter(t => t.is_private);
-  const sharedTasks  = allTasks.filter(t => !t.is_private);
 
   renderPrivateTasks(privateTasks);
+  applyTaskFilters();
 
-  if (!sharedTasks.length) { show('tasksEmpty'); return; }
-
-  renderSharedTasks(sharedTasks);
-  show('tasksBody');
+  // Update nav badge with active task count
+  const activeCount = allTasks.filter(t => !t.is_private && t.status !== 'complete').length;
+  const navBtn = document.getElementById('navTasks');
+  if (navBtn) {
+    let badge = navBtn.querySelector('.nav-badge');
+    if (activeCount > 0) {
+      if (!badge) { badge = document.createElement('span'); badge.className = 'nav-badge'; navBtn.appendChild(badge); }
+      badge.textContent = activeCount;
+    } else if (badge) {
+      badge.remove();
+    }
+  }
+  if (allTasks.filter(t => !t.is_private).length) show('tasksBody');
 }
 
 // ── Private tasks ─────────────────────────────────────────
@@ -665,11 +674,51 @@ function cancelPrivateTask() {
 }
 
 // ── Shared tasks ──────────────────────────────────────────
+// ── Filter / search state ─────────────────────────────────
+let taskStatusFilter = 'all';
+let collapsedLists   = new Set();
+
+function setTaskStatusFilter(btn) {
+  document.querySelectorAll('#taskFilterChips .filter-chip').forEach(c => c.classList.remove('active'));
+  btn.classList.add('active');
+  taskStatusFilter = btn.dataset.status;
+  applyTaskFilters();
+}
+
+function applyTaskFilters() {
+  const q = (document.getElementById('taskSearchInput')?.value || '').toLowerCase().trim();
+  const shared = allTasks.filter(t => !t.is_private);
+
+  const filtered = shared.filter(t => {
+    if (taskStatusFilter !== 'all' && t.status !== taskStatusFilter) return false;
+    if (!q) return true;
+    const inTitle    = t.title.toLowerCase().includes(q);
+    const inDept     = (t.department || '').toLowerCase().includes(q);
+    const inAssignee = (t.task_assignments || []).some(a =>
+      (a.assignee_name || '').toLowerCase().includes(q) ||
+      (a.assignee_email || '').toLowerCase().includes(q)
+    );
+    return inTitle || inDept || inAssignee;
+  });
+
+  hide('tasksEmpty');
+  const noResults = document.getElementById('tasksNoResults');
+
+  if (!filtered.length && shared.length) {
+    hide('tasksBody');
+    noResults?.classList.remove('hidden');
+    return;
+  }
+  noResults?.classList.add('hidden');
+  renderSharedTasks(filtered);
+  show('tasksBody');
+}
+
 function renderSharedTasks(tasks) {
   const body = document.getElementById('tasksBody');
   const statusOrder = { in_progress: 0, todo: 1, complete: 2 };
 
-  // Group by list (null = no list)
+  // Group by list
   const groups = new Map();
   groups.set(null, []);
   allTaskLists.forEach(l => groups.set(l.id, []));
@@ -682,19 +731,22 @@ function renderSharedTasks(tasks) {
   let html = '';
   groups.forEach((groupTasks, listId) => {
     if (!groupTasks.length) return;
-    const listName = listId ? (allTaskLists.find(l => l.id === listId)?.name || 'Unknown') : 'General';
-    const sorted = [...groupTasks].sort((a, b) => (statusOrder[a.status] ?? 1) - (statusOrder[b.status] ?? 1));
-    const active = sorted.filter(t => t.status !== 'complete');
-    const done   = sorted.filter(t => t.status === 'complete');
+    const listName  = listId ? (allTaskLists.find(l => l.id === listId)?.name || 'Unknown') : 'General';
+    const colKey    = listId || 'null';
+    const collapsed = collapsedLists.has(colKey);
+    const sorted    = [...groupTasks].sort((a, b) => (statusOrder[a.status] ?? 1) - (statusOrder[b.status] ?? 1));
+    const active    = sorted.filter(t => t.status !== 'complete');
+    const done      = sorted.filter(t => t.status === 'complete');
 
     html += `
-      <div class="task-group" data-list="${listId || ''}">
-        <div class="task-group-header">
+      <div class="task-group ${collapsed ? 'task-group-collapsed' : ''}" data-list="${listId || ''}">
+        <div class="task-group-header" onclick="toggleListCollapse('${colKey}')">
+          <span class="task-group-chevron">${collapsed ? '›' : '⌄'}</span>
           <span class="task-group-name">${escHtml(listName)}</span>
           <span class="task-group-count">${active.length} active${done.length ? ` · ${done.length} done` : ''}</span>
-          <button class="btn btn-ghost btn-sm" style="margin-left:auto;font-size:0.75rem;padding:0.2rem 0.5rem;"
-            onclick="copyListSummary('${listId || ''}')" title="Copy summary for this list">Copy Summary</button>
-          ${listId ? `<button class="btn-icon text-danger" onclick="deleteList('${listId}')" title="Delete list">✕</button>` : ''}
+          <button class="btn btn-ghost btn-sm task-group-copy-btn"
+            onclick="event.stopPropagation();copyListSummary('${listId || ''}')" title="Copy summary">Copy</button>
+          ${listId ? `<button class="btn-icon text-danger" onclick="event.stopPropagation();deleteList('${listId}')" title="Delete list">✕</button>` : ''}
         </div>
         <div class="task-list">
           ${active.map(t => taskCardHtml(t)).join('')}
@@ -707,7 +759,17 @@ function renderSharedTasks(tasks) {
       </div>`;
   });
 
-  body.innerHTML = html || '<p class="text-muted text-sm">No tasks yet.</p>';
+  body.innerHTML = html || '<p class="text-muted text-sm" style="padding:1rem;">No tasks yet.</p>';
+}
+
+function toggleListCollapse(colKey) {
+  if (collapsedLists.has(colKey)) {
+    collapsedLists.delete(colKey);
+  } else {
+    collapsedLists.add(colKey);
+  }
+  const selector = colKey === 'null' ? '[data-list=""]' : `[data-list="${colKey}"]`;
+  document.querySelector(`.task-group${selector}`)?.classList.toggle('task-group-collapsed');
 }
 
 const STATUS_LABELS = { todo: 'To Do', in_progress: 'In Progress', complete: 'Complete' };
@@ -1053,19 +1115,32 @@ async function deleteList(id) {
 }
 
 // ── Copy summary for one list ─────────────────────────────
+// ── Shared task line formatter ────────────────────────────
+function formatTaskLine(t) {
+  const inProgress = t.status === 'in_progress';
+  const deadline   = t.deadline
+    ? ` - Due ${new Date(t.deadline + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`
+    : '';
+  const assignees  = (t.task_assignments || []).map(a => a.assignee_name || a.assignee_email).join(', ');
+  const suffix     = [inProgress ? 'In Progress' : '', assignees, deadline ? deadline.slice(3) : '']
+    .filter(Boolean);
+  // WhatsApp bold via asterisks; plain bullet for iMessage
+  return `• ${inProgress ? '*' : ''}${t.title}${inProgress ? '*' : ''}${suffix.length ? ' (' + [inProgress ? 'In Progress' : null, assignees || null, t.deadline ? 'Due ' + new Date(t.deadline + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : null].filter(Boolean).join(', ') + ')' : ''}`;
+}
+
 function copyListSummary(listId) {
   const listName = listId ? (allTaskLists.find(l => l.id === listId)?.name || 'General') : 'General';
   const tasks = allTasks.filter(t =>
     !t.is_private && t.status !== 'complete' && (t.list_id || null) === (listId || null)
   );
   if (!tasks.length) { showToast('No active tasks in this list.', 'success'); return; }
-  const lines = [`${listName} Tasks\n`];
-  tasks.forEach(t => {
-    const status    = t.status === 'in_progress' ? '[In Progress]' : '[To Do]';
-    const deadline  = t.deadline ? ` (due ${new Date(t.deadline).toLocaleDateString()})` : '';
-    const assignees = (t.task_assignments || []).map(a => a.assignee_name || a.assignee_email).join(', ');
-    lines.push(`  ${status} ${t.title}${deadline}${assignees ? ` - ${assignees}` : ''}`);
-  });
+
+  const lines = [
+    `*${listName}*`,
+    '',
+    ...tasks.map(formatTaskLine),
+  ];
+
   navigator.clipboard.writeText(lines.join('\n'))
     .then(() => showToast(`"${listName}" summary copied!`, 'success'))
     .catch(() => showToast('Could not copy.', 'error'));
@@ -1076,30 +1151,26 @@ function generateTaskSummary() {
   const shared = allTasks.filter(t => !t.is_private && t.status !== 'complete');
   if (!shared.length) { showToast('No active tasks to summarize.', 'success'); return; }
 
-  const lines = ['Tasks Update\n'];
   const byList = new Map();
-  byList.set('General', []);
-  allTaskLists.forEach(l => byList.set(l.name, []));
+  allTaskLists.forEach(l => byList.set(l.id, { name: l.name, tasks: [] }));
+  byList.set(null, { name: 'General', tasks: [] });
+
   shared.forEach(t => {
-    const key = t.list_id ? (allTaskLists.find(l => l.id === t.list_id)?.name || 'General') : 'General';
-    if (!byList.has(key)) byList.set(key, []);
-    byList.get(key).push(t);
+    const key = t.list_id && byList.has(t.list_id) ? t.list_id : null;
+    byList.get(key).tasks.push(t);
   });
 
-  byList.forEach((tasks, name) => {
+  const sections = [];
+  byList.forEach(({ name, tasks }) => {
     if (!tasks.length) return;
-    lines.push(`\n${name}:`);
-    tasks.forEach(t => {
-      const status = t.status === 'in_progress' ? '[In Progress]' : '[To Do]';
-      const deadline = t.deadline ? ` (due ${new Date(t.deadline).toLocaleDateString()})` : '';
-      const assignees = (t.task_assignments || []).map(a => a.assignee_name || a.assignee_email).join(', ');
-      lines.push(`  ${status} ${t.title}${deadline}${assignees ? ` - ${assignees}` : ''}`);
-    });
+    sections.push(`*${name}*`);
+    tasks.forEach(t => sections.push(formatTaskLine(t)));
+    sections.push('');
   });
 
-  navigator.clipboard.writeText(lines.join('\n'))
-    .then(() => showToast('Summary copied to clipboard!', 'success'))
-    .catch(() => showToast('Could not copy — try manually.', 'error'));
+  navigator.clipboard.writeText(sections.join('\n').trimEnd())
+    .then(() => showToast('Summary copied!', 'success'))
+    .catch(() => showToast('Could not copy.', 'error'));
 }
 
 // ── Create schedule ────────────────────────────────────────
@@ -1180,6 +1251,33 @@ function bindUI() {
       if (!contactGroups.length) ensureContactsLoaded();
       loadContactsForTaskPicker(taskAssigneeList);
       setTimeout(() => document.getElementById('assignPickerSearch').focus(), 50);
+    }
+  });
+
+  // Keyboard shortcuts
+  document.addEventListener('keydown', e => {
+    // Ignore when typing in an input/textarea
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+
+    // N → open new task modal (only when in tasks view)
+    if (e.key === 'n' || e.key === 'N') {
+      const tasksSection = document.getElementById('tasksSection');
+      if (tasksSection && !tasksSection.classList.contains('hidden')) {
+        e.preventDefault();
+        openTaskModal();
+      }
+    }
+
+    // Escape → close any open modal
+    if (e.key === 'Escape') {
+      const modals = ['taskDetailModal', 'newTaskModal', 'newListModal', 'pubTaskDetailModal'];
+      for (const id of modals) {
+        const el = document.getElementById(id);
+        if (el && !el.classList.contains('hidden')) {
+          el.classList.add('hidden');
+          break;
+        }
+      }
     }
   });
 }
