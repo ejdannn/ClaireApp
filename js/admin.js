@@ -771,8 +771,11 @@ async function openTaskDetail(taskId) {
   // Meta pills (no status — it's shown above)
   const meta = [];
   if (t.department) meta.push(`<span class="task-tag">${escHtml(t.department)}</span>`);
-  if (t.deadline) meta.push(`<span class="task-deadline-pill ${deadlineClass(t.deadline)}">${deadlineLabel(t.deadline)}</span>`);
-  if (t.todo_lists?.name) meta.push(`<span class="task-tag">📋 ${escHtml(t.todo_lists.name)}</span>`);
+  if (t.deadline) {
+    const fullDate = new Date(t.deadline + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+    meta.push(`<span class="task-deadline-pill ${deadlineClass(t.deadline)}" title="${fullDate}">Due ${fullDate}</span>`);
+  }
+  if (t.todo_lists?.name) meta.push(`<span class="task-tag">List: ${escHtml(t.todo_lists.name)}</span>`);
   document.getElementById('taskDetailMeta').innerHTML = meta.join('');
   document.getElementById('taskDetailDesc').textContent = t.description || '';
 
