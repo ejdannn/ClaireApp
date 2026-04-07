@@ -46,6 +46,7 @@
     <nav class="admin-main-nav">
       <button class="admin-nav-btn active" id="navSchedules" onclick="switchMainView('schedules')"><span class="icon-emoji">📅</span> Schedules</button>
       <button class="admin-nav-btn" id="navContacts" onclick="switchMainView('contacts')"><span class="icon-emoji">👥</span> Contacts</button>
+      <button class="admin-nav-btn" id="navTasks" onclick="switchMainView('tasks')"><span class="icon-emoji">✅</span> Tasks</button>
     </nav>
 
     <!-- Schedules section -->
@@ -218,7 +219,155 @@
       </div>
     </div>
 
+    <!-- ── Tasks Section ── -->
+    <div id="tasksSection" class="hidden">
+
+      <!-- Private tasks box (admin only) -->
+      <div class="task-private-box">
+        <div class="task-private-header">
+          <span><span class="icon-emoji">🔒</span> My Private Tasks</span>
+          <button class="btn btn-sm btn-ghost" id="addPrivateTaskBtn">+ Add</button>
+        </div>
+        <div id="privateTasksList" class="private-tasks-list">
+          <span class="text-muted text-sm">No private tasks yet.</span>
+        </div>
+        <div id="privateTaskInput" class="hidden" style="margin-top:0.75rem;display:flex;gap:0.5rem;align-items:center;">
+          <input type="text" id="privateTaskTitle" placeholder="Task title…" style="flex:1;padding:0.45rem 0.7rem;border:1px solid var(--border);border-radius:8px;font-size:0.875rem;font-family:inherit;background:var(--bg);" />
+          <button class="btn btn-sm btn-primary" onclick="savePrivateTask()">Add</button>
+          <button class="btn btn-sm btn-ghost" onclick="cancelPrivateTask()">Cancel</button>
+        </div>
+      </div>
+
+      <!-- Shared tasks header -->
+      <div class="groups-header" style="margin-top:1.5rem;">
+        <div>
+          <h2>Shared Tasks</h2>
+          <p class="text-muted text-sm" style="margin-top:0.25rem;">Assign tasks to your team. Share the <a href="/tasks" target="_blank" style="color:var(--primary);text-decoration:none;">public tasks page</a> so they can see and check off their work.</p>
+        </div>
+        <div style="display:flex;gap:0.5rem;">
+          <button class="btn btn-secondary btn-sm" id="generateSummaryBtn">📋 Copy Summary</button>
+          <button class="btn btn-secondary btn-sm" id="newListBtn">+ New List</button>
+          <button class="btn btn-primary" id="newTaskBtn">+ New Task</button>
+        </div>
+      </div>
+
+      <div id="tasksLoading" class="loading-state">
+        <div class="spinner spinner-dark"></div>
+        <span>Loading tasks…</span>
+      </div>
+
+      <div id="tasksBody" class="hidden"></div>
+
+      <div id="tasksEmpty" class="empty-state hidden">
+        <div class="empty-icon">✅</div>
+        <h3>No tasks yet</h3>
+        <p>Create your first task and assign it to your team.</p>
+        <button class="btn btn-primary" onclick="document.getElementById('newTaskBtn').click()">Create First Task</button>
+      </div>
+
+    </div>
+
   </main>
+</div>
+
+<!-- ── New Task Modal ── -->
+<div id="newTaskModal" class="modal-backdrop hidden">
+  <div class="modal" style="max-width:520px;">
+    <div class="modal-header">
+      <h3 id="taskModalTitle">New Task</h3>
+      <button class="btn-icon" onclick="closeTaskModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label for="taskTitleInput">Title <span style="color:var(--danger)">*</span></label>
+        <input type="text" id="taskTitleInput" placeholder="What needs to be done?" />
+      </div>
+      <div class="form-group">
+        <label for="taskDescInput">Description <span class="text-muted text-sm">(optional)</span></label>
+        <textarea id="taskDescInput" placeholder="Any extra details, links, or context…" rows="3"></textarea>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;">
+        <div class="form-group">
+          <label for="taskDeadlineInput">Deadline</label>
+          <input type="date" id="taskDeadlineInput" />
+        </div>
+        <div class="form-group">
+          <label for="taskDeptInput">Department</label>
+          <input type="text" id="taskDeptInput" placeholder="e.g. Marketing, Tech…" />
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="taskListSelect">Sub-list</label>
+        <select id="taskListSelect">
+          <option value="">— No list —</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Assign to</label>
+        <div id="taskAssignees" class="task-assignee-list"></div>
+        <button class="btn btn-sm btn-ghost" id="openAssignPickerBtn" style="margin-top:0.5rem;">+ Add from Contacts</button>
+        <div id="taskAssignPicker" class="hidden contact-picker-body" style="margin-top:0.5rem;max-height:180px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:0.5rem;"></div>
+      </div>
+      <div id="taskModalError" class="error-msg hidden"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeTaskModal()">Cancel</button>
+      <button class="btn btn-primary" id="confirmTaskBtn" onclick="saveTask()">Create Task</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── New List Modal ── -->
+<div id="newListModal" class="modal-backdrop hidden">
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-header">
+      <h3>New Sub-list</h3>
+      <button class="btn-icon" onclick="closeListModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label for="listNameInput">List Name <span style="color:var(--danger)">*</span></label>
+        <input type="text" id="listNameInput" placeholder="e.g. Event Planning, Tech, Marketing…" />
+      </div>
+      <div class="form-group">
+        <label for="listDescInput">Description <span class="text-muted text-sm">(optional)</span></label>
+        <input type="text" id="listDescInput" placeholder="What's this list for?" />
+      </div>
+      <div id="listModalError" class="error-msg hidden"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeListModal()">Cancel</button>
+      <button class="btn btn-primary" id="confirmListBtn" onclick="saveList()">Create List</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Task Detail Modal ── -->
+<div id="taskDetailModal" class="modal-backdrop hidden">
+  <div class="modal" style="max-width:540px;">
+    <div class="modal-header">
+      <h3 id="taskDetailTitle" style="flex:1;margin-right:0.5rem;"></h3>
+      <button class="btn-icon" id="editTaskDetailBtn" title="Edit task" style="margin-right:0.25rem;">✏️</button>
+      <button class="btn-icon" onclick="closeTaskDetail()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="taskDetailMeta" style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-bottom:1rem;"></div>
+      <div id="taskDetailDesc" class="text-muted text-sm" style="margin-bottom:1rem;white-space:pre-wrap;"></div>
+      <div style="margin-bottom:1rem;">
+        <div class="text-sm" style="font-weight:600;margin-bottom:0.4rem;">Assignees</div>
+        <div id="taskDetailAssignees"></div>
+      </div>
+      <div>
+        <div class="text-sm" style="font-weight:600;margin-bottom:0.5rem;">Comments &amp; History</div>
+        <div id="taskDetailComments" style="max-height:200px;overflow-y:auto;"></div>
+        <div id="taskDetailHistory" style="max-height:120px;overflow-y:auto;margin-top:0.5rem;"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost btn-sm" style="color:var(--danger);" id="deleteTaskBtn">Delete Task</button>
+      <button class="btn btn-ghost" onclick="closeTaskDetail()">Close</button>
+    </div>
+  </div>
 </div>
 
 <!-- ── Edit Schedule Modal ── -->

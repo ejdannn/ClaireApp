@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Claire Tasks</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>✅</text></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/style.css" />
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+
+<div class="admin-layout">
+  <header class="admin-header">
+    <div class="admin-header-inner">
+      <div class="admin-brand">
+        <span class="admin-brand-icon icon-emoji">✅</span>
+        Claire Tasks
+      </div>
+      <div id="userBadge" class="hidden" style="display:flex;align-items:center;gap:0.75rem;">
+        <div id="userAvatar" class="task-chip-avatar" style="width:2rem;height:2rem;font-size:0.9rem;"></div>
+        <span id="userName" class="text-sm" style="font-weight:600;"></span>
+        <button class="btn btn-ghost btn-sm" onclick="signOut()">Sign out</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="admin-body">
+
+    <!-- Sign-in screen -->
+    <div id="signInView" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;gap:1.5rem;">
+      <div style="text-align:center;">
+        <div style="font-size:3rem;margin-bottom:0.5rem;">✅</div>
+        <h2 style="margin:0 0 0.5rem;">Claire Tasks</h2>
+        <p class="text-muted" style="max-width:320px;">Sign in with your Google account to see tasks assigned to you.</p>
+      </div>
+
+      <div id="googleSignInBtn"></div>
+
+      <div style="text-align:center;margin-top:1rem;">
+        <p class="text-muted text-sm">Not sure which email you used?</p>
+        <input type="text" id="nameSearch" placeholder="Search by name…"
+          oninput="searchByName(this.value)"
+          style="margin-top:0.4rem;padding:0.5rem 0.8rem;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;font-family:inherit;width:220px;" />
+        <div id="nameSearchResults" style="margin-top:0.5rem;font-size:0.875rem;color:var(--text-muted);"></div>
+      </div>
+    </div>
+
+    <!-- Tasks view (shown after sign-in) -->
+    <div id="tasksView" class="hidden">
+
+      <div id="myTasksSection">
+        <h2 style="margin-bottom:1rem;">Your Tasks</h2>
+        <div id="myTasksList"></div>
+      </div>
+
+      <div style="margin-top:2rem;">
+        <h2 style="margin-bottom:0.25rem;">All Tasks</h2>
+        <p class="text-muted text-sm" style="margin-bottom:1rem;">Browse everything — only your assigned tasks can be checked off.</p>
+        <div id="allTasksList"></div>
+      </div>
+
+    </div>
+
+    <div id="tasksPublicLoading" class="loading-state hidden">
+      <div class="spinner spinner-dark"></div>
+      <span>Loading tasks…</span>
+    </div>
+
+  </main>
+</div>
+
+<!-- ── Task Detail Modal ── -->
+<div id="pubTaskDetailModal" class="modal-backdrop hidden">
+  <div class="modal" style="max-width:520px;">
+    <div class="modal-header">
+      <h3 id="pubTaskDetailTitle" style="flex:1;margin-right:0.5rem;"></h3>
+      <button class="btn-icon" onclick="closePubTaskDetail()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="pubTaskDetailMeta" style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-bottom:1rem;"></div>
+      <div id="pubTaskDetailDesc" class="text-muted text-sm" style="margin-bottom:1rem;white-space:pre-wrap;"></div>
+      <div id="pubMyAssignment" class="hidden" style="margin-bottom:1rem;">
+        <div class="text-sm" style="font-weight:600;margin-bottom:0.5rem;">Your assignment</div>
+        <div id="pubAssignmentStatus"></div>
+      </div>
+      <div>
+        <div class="text-sm" style="font-weight:600;margin-bottom:0.5rem;">Comments</div>
+        <div id="pubTaskComments"></div>
+        <div id="pubCommentBox" class="hidden" style="margin-top:0.75rem;display:flex;gap:0.5rem;">
+          <input type="text" id="pubCommentInput" placeholder="Add a comment…"
+            style="flex:1;padding:0.45rem 0.7rem;border:1px solid var(--border);border-radius:8px;font-size:0.875rem;font-family:inherit;"
+            onkeydown="if(event.key==='Enter')submitComment()" />
+          <button class="btn btn-sm btn-primary" onclick="submitComment()">Send</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closePubTaskDetail()">Close</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<script src="/js/config.js"></script>
+<script src="/js/utils.js"></script>
+<script src="/js/tasks-public.js"></script>
+</body>
+</html>

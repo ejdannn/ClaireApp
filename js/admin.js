@@ -545,14 +545,476 @@ function renderRecommended() {
     </div>`).join('');
 }
 
-// ── Main view switcher (Schedules / Contacts) ─────────────
+// ── Main view switcher (Schedules / Contacts / Tasks) ─────
 function switchMainView(view) {
-  const isSchedules = view === 'schedules';
-  document.getElementById('schedulesSection').classList.toggle('hidden', !isSchedules);
-  document.getElementById('contactsSection').classList.toggle('hidden', isSchedules);
-  document.getElementById('navSchedules').classList.toggle('active', isSchedules);
-  document.getElementById('navContacts').classList.toggle('active', !isSchedules);
-  if (!isSchedules) loadContactGroups();
+  ['schedules','contacts','tasks'].forEach(v => {
+    document.getElementById(v + 'Section').classList.toggle('hidden', v !== view);
+    document.getElementById('nav' + v.charAt(0).toUpperCase() + v.slice(1)).classList.toggle('active', v === view);
+  });
+  if (view === 'contacts') loadContactGroups();
+  if (view === 'tasks') loadTasks();
+}
+
+// ══════════════════════════════════════════════════════════
+//  TASKS SYSTEM
+// ══════════════════════════════════════════════════════════
+
+let allTasks = [], allTaskLists = [], editingTaskId = null;
+
+// ── Deadline urgency ──────────────────────────────────────
+function deadlineClass(deadline) {
+  if (!deadline) return '';
+  const days = (new Date(deadline) - new Date()) / 86400000;
+  if (days < 0)  return 'deadline-overdue';
+  if (days < 1)  return 'deadline-today';
+  if (days < 3)  return 'deadline-soon';
+  if (days < 7)  return 'deadline-week';
+  return 'deadline-ok';
+}
+
+function deadlineLabel(deadline) {
+  if (!deadline) return '';
+  const days = Math.ceil((new Date(deadline) - new Date()) / 86400000);
+  if (days < 0)  return `Overdue by ${Math.abs(days)}d`;
+  if (days === 0) return 'Due today';
+  if (days === 1) return 'Due tomorrow';
+  return `Due in ${days}d`;
+}
+
+// ── Load tasks + lists ────────────────────────────────────
+async function loadTasks() {
+  show('tasksLoading'); hide('tasksBody'); hide('tasksEmpty');
+
+  const [tasksRes, listsRes] = await Promise.all([
+    fetch(`/api/tasks?adminCode=${encodeURIComponent(getAdminCode())}`),
+    fetch(`/api/task-lists?adminCode=${encodeURIComponent(getAdminCode())}`),
+  ]);
+
+  hide('tasksLoading');
+
+  if (!tasksRes.ok || !listsRes.ok) {
+    showToast('Failed to load tasks.', 'error'); return;
+  }
+
+  allTasks = await tasksRes.json();
+  allTaskLists = await listsRes.json();
+
+  const privateTasks = allTasks.filter(t => t.is_private);
+  const sharedTasks  = allTasks.filter(t => !t.is_private);
+
+  renderPrivateTasks(privateTasks);
+
+  if (!sharedTasks.length) { show('tasksEmpty'); return; }
+
+  renderSharedTasks(sharedTasks);
+  show('tasksBody');
+}
+
+// ── Private tasks ─────────────────────────────────────────
+function renderPrivateTasks(tasks) {
+  const el = document.getElementById('privateTasksList');
+  if (!tasks.length) {
+    el.innerHTML = '<span class="text-muted text-sm">No private tasks yet.</span>';
+    return;
+  }
+  el.innerHTML = tasks.map(t => `
+    <div class="private-task-row ${deadlineClass(t.deadline)}">
+      <label class="private-task-check">
+        <input type="checkbox" ${t.status === 'complete' ? 'checked' : ''}
+          onchange="togglePrivateTaskStatus('${t.id}', this.checked)" />
+        <span class="private-task-title ${t.status === 'complete' ? 'task-done' : ''}">${escHtml(t.title)}</span>
+      </label>
+      ${t.deadline ? `<span class="task-deadline-pill ${deadlineClass(t.deadline)}">${deadlineLabel(t.deadline)}</span>` : ''}
+      <button class="btn-icon text-danger" onclick="deleteTask('${t.id}')" title="Delete">✕</button>
+    </div>`).join('');
+}
+
+async function togglePrivateTaskStatus(id, done) {
+  await fetch('/api/tasks', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id, status: done ? 'complete' : 'todo', adminCode: getAdminCode() }),
+  });
+  loadTasks();
+}
+
+function savePrivateTask() {
+  const title = document.getElementById('privateTaskTitle').value.trim();
+  if (!title) return;
+  cancelPrivateTask();
+  fetch('/api/tasks', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title, is_private: true, adminCode: getAdminCode() }),
+  }).then(() => loadTasks());
+}
+
+function cancelPrivateTask() {
+  document.getElementById('privateTaskInput').classList.add('hidden');
+  document.getElementById('privateTaskTitle').value = '';
+}
+
+// ── Shared tasks ──────────────────────────────────────────
+function renderSharedTasks(tasks) {
+  const body = document.getElementById('tasksBody');
+  const statusOrder = { in_progress: 0, todo: 1, complete: 2 };
+
+  // Group by list (null = no list)
+  const groups = new Map();
+  groups.set(null, []);
+  allTaskLists.forEach(l => groups.set(l.id, []));
+  tasks.forEach(t => {
+    const key = t.list_id || null;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(t);
+  });
+
+  let html = '';
+  groups.forEach((groupTasks, listId) => {
+    if (!groupTasks.length) return;
+    const listName = listId ? (allTaskLists.find(l => l.id === listId)?.name || 'Unknown') : 'General';
+    const sorted = [...groupTasks].sort((a, b) => (statusOrder[a.status] ?? 1) - (statusOrder[b.status] ?? 1));
+    const active = sorted.filter(t => t.status !== 'complete');
+    const done   = sorted.filter(t => t.status === 'complete');
+
+    html += `
+      <div class="task-group" data-list="${listId || ''}">
+        <div class="task-group-header">
+          <span class="task-group-name">${escHtml(listName)}</span>
+          <span class="task-group-count">${active.length} active${done.length ? ` · ${done.length} done` : ''}</span>
+          ${listId ? `<button class="btn-icon text-danger" onclick="deleteList('${listId}')" title="Delete list" style="margin-left:auto;">✕</button>` : ''}
+        </div>
+        <div class="task-list">
+          ${active.map(t => taskCardHtml(t)).join('')}
+          ${done.length ? `
+            <details class="task-done-group">
+              <summary class="task-done-summary">${done.length} completed</summary>
+              ${done.map(t => taskCardHtml(t)).join('')}
+            </details>` : ''}
+        </div>
+      </div>`;
+  });
+
+  body.innerHTML = html || '<p class="text-muted text-sm">No tasks yet.</p>';
+}
+
+function taskCardHtml(t) {
+  const assignments = t.task_assignments || [];
+  const dClass = deadlineClass(t.deadline);
+  const statusColors = { todo: 'var(--text-muted)', in_progress: 'var(--primary-dark)', complete: 'var(--success)' };
+  const statusLabels = { todo: 'To Do', in_progress: 'In Progress', complete: 'Complete' };
+
+  return `
+    <div class="task-card ${t.status === 'complete' ? 'task-card-done' : ''} ${dClass}"
+         onclick="openTaskDetail('${t.id}')">
+      <div class="task-card-left">
+        <select class="task-status-select" style="color:${statusColors[t.status] || 'inherit'};"
+          onclick="event.stopPropagation()"
+          onchange="updateTaskStatus('${t.id}', this.value)">
+          <option value="todo"        ${t.status==='todo'        ?'selected':''}>To Do</option>
+          <option value="in_progress" ${t.status==='in_progress' ?'selected':''}>In Progress</option>
+          <option value="complete"    ${t.status==='complete'    ?'selected':''}>Complete</option>
+        </select>
+      </div>
+      <div class="task-card-body">
+        <div class="task-card-title ${t.status === 'complete' ? 'task-done' : ''}">${escHtml(t.title)}</div>
+        <div class="task-card-meta">
+          ${t.department ? `<span class="task-tag">${escHtml(t.department)}</span>` : ''}
+          ${t.deadline   ? `<span class="task-deadline-pill ${dClass}">${deadlineLabel(t.deadline)}</span>` : ''}
+          ${assignments.length ? `<span class="task-assignee-chips">${assignments.map(a =>
+            `<span class="task-chip">${escHtml(a.assignee_name || a.assignee_email)}</span>`).join('')}</span>` : ''}
+        </div>
+      </div>
+    </div>`;
+}
+
+async function updateTaskStatus(id, status) {
+  await fetch('/api/tasks', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id, status, adminCode: getAdminCode() }),
+  });
+  loadTasks();
+}
+
+// ── Task detail modal ─────────────────────────────────────
+async function openTaskDetail(taskId) {
+  const t = allTasks.find(t => t.id === taskId);
+  if (!t) return;
+
+  document.getElementById('taskDetailTitle').textContent = t.title;
+
+  // Meta pills
+  const meta = [];
+  if (t.status) meta.push(`<span class="task-tag">${t.status.replace('_',' ')}</span>`);
+  if (t.department) meta.push(`<span class="task-tag">${escHtml(t.department)}</span>`);
+  if (t.deadline) meta.push(`<span class="task-deadline-pill ${deadlineClass(t.deadline)}">${deadlineLabel(t.deadline)}</span>`);
+  if (t.todo_lists?.name) meta.push(`<span class="task-tag">📋 ${escHtml(t.todo_lists.name)}</span>`);
+  document.getElementById('taskDetailMeta').innerHTML = meta.join('');
+
+  document.getElementById('taskDetailDesc').textContent = t.description || '';
+
+  const assignments = t.task_assignments || [];
+  document.getElementById('taskDetailAssignees').innerHTML = assignments.length
+    ? assignments.map(a => `
+        <div class="task-detail-assignee">
+          <div class="task-chip-avatar">${(a.assignee_name || a.assignee_email)[0].toUpperCase()}</div>
+          <div>
+            <div class="text-sm" style="font-weight:600;">${escHtml(a.assignee_name || a.assignee_email)}</div>
+            ${a.assignee_name ? `<div class="text-sm text-muted">${escHtml(a.assignee_email)}</div>` : ''}
+          </div>
+          <span class="task-tag ${a.completed_at ? 'tag-done' : ''}" style="margin-left:auto;">
+            ${a.completed_at ? 'Done' : 'Pending'}
+          </span>
+        </div>`).join('')
+    : '<span class="text-muted text-sm">No one assigned yet.</span>';
+
+  document.getElementById('deleteTaskBtn').onclick = () => {
+    if (confirm(`Delete "${t.title}"?`)) deleteTask(t.id);
+  };
+  document.getElementById('editTaskDetailBtn').onclick = () => { closeTaskDetail(); openTaskModal(t); };
+
+  // Load comments + history
+  document.getElementById('taskDetailComments').innerHTML = '<span class="text-muted text-sm">Loading…</span>';
+  document.getElementById('taskDetailHistory').innerHTML = '';
+
+  show('taskDetailModal');
+
+  const [commentsRes, historyRes] = await Promise.all([
+    fetch(`/api/task-comments?taskId=${taskId}`),
+    fetch(`/api/tasks?adminCode=${encodeURIComponent(getAdminCode())}`),
+  ]);
+
+  const comments = commentsRes.ok ? await commentsRes.json() : [];
+  document.getElementById('taskDetailComments').innerHTML = comments.length
+    ? comments.map(c => `
+        <div class="task-comment">
+          <div class="task-comment-author">${escHtml(c.author_name || c.author_email)}</div>
+          <div class="task-comment-body">${escHtml(c.body)}</div>
+          <div class="task-comment-time text-muted text-sm">${new Date(c.created_at).toLocaleString()}</div>
+        </div>`).join('')
+    : '<span class="text-muted text-sm">No comments yet.</span>';
+}
+
+function closeTaskDetail() { hide('taskDetailModal'); }
+
+// ── Task create/edit modal ────────────────────────────────
+function openTaskModal(task = null) {
+  editingTaskId = task?.id || null;
+  document.getElementById('taskModalTitle').textContent = task ? 'Edit Task' : 'New Task';
+  document.getElementById('confirmTaskBtn').textContent = task ? 'Save Changes' : 'Create Task';
+  document.getElementById('taskTitleInput').value = task?.title || '';
+  document.getElementById('taskDescInput').value  = task?.description || '';
+  document.getElementById('taskDeadlineInput').value = task?.deadline ? task.deadline.slice(0,10) : '';
+  document.getElementById('taskDeptInput').value  = task?.department || '';
+  document.getElementById('taskModalError').classList.add('hidden');
+
+  // Populate list select
+  const sel = document.getElementById('taskListSelect');
+  sel.innerHTML = '<option value="">— No list —</option>' +
+    allTaskLists.map(l => `<option value="${l.id}" ${task?.list_id === l.id ? 'selected' : ''}>${escHtml(l.name)}</option>`).join('');
+
+  // Render existing assignees
+  renderTaskAssignees(task?.task_assignments || []);
+
+  // Load contact picker
+  loadContactsForTaskPicker(task?.task_assignments || []);
+
+  hide('taskAssignPicker');
+  show('newTaskModal');
+  document.getElementById('taskTitleInput').focus();
+}
+
+function closeTaskModal() {
+  hide('newTaskModal');
+  editingTaskId = null;
+}
+
+// Assignee management inside task modal
+let taskAssigneeList = []; // [{name, email}]
+
+function renderTaskAssignees(assignments) {
+  taskAssigneeList = assignments.map(a => ({ name: a.assignee_name || '', email: a.assignee_email }));
+  refreshTaskAssigneeDisplay();
+}
+
+function refreshTaskAssigneeDisplay() {
+  const el = document.getElementById('taskAssignees');
+  if (!taskAssigneeList.length) {
+    el.innerHTML = '<span class="text-muted text-sm">No one assigned yet.</span>';
+    return;
+  }
+  el.innerHTML = taskAssigneeList.map((a, i) => `
+    <div class="task-assignee-row">
+      <div class="task-chip-avatar">${(a.name || a.email)[0].toUpperCase()}</div>
+      <span>${escHtml(a.name || a.email)}</span>
+      <button class="btn-icon text-danger" onclick="removeTaskAssignee(${i})" style="margin-left:auto;">✕</button>
+    </div>`).join('');
+}
+
+function removeTaskAssignee(idx) {
+  taskAssigneeList.splice(idx, 1);
+  refreshTaskAssigneeDisplay();
+  loadContactsForTaskPicker(taskAssigneeList);
+}
+
+function loadContactsForTaskPicker(currentAssignments) {
+  const picker = document.getElementById('taskAssignPicker');
+  if (!contactGroups.length) {
+    picker.innerHTML = '<span class="text-muted text-sm">No contacts loaded. Go to Contacts tab first.</span>';
+    return;
+  }
+  const assignedEmails = new Set((currentAssignments || taskAssigneeList).map(a => a.email || a.assignee_email));
+  picker.innerHTML = contactGroups.map(g => {
+    const available = (g.members || []).filter(m => !assignedEmails.has(m.email));
+    if (!available.length) return '';
+    return `
+      <div style="margin-bottom:0.5rem;">
+        <div class="text-sm" style="font-weight:600;color:var(--text-muted);margin-bottom:0.25rem;">${escHtml(g.name)}</div>
+        ${available.map(m => `
+          <label class="contact-picker-item" style="display:flex;align-items:center;gap:0.5rem;padding:0.3rem 0.4rem;cursor:pointer;border-radius:6px;">
+            <input type="checkbox" onchange="toggleTaskAssignee(this, '${escHtml(m.name)}', '${escHtml(m.email)}')" />
+            <span>${escHtml(m.name || m.email)}</span>
+            ${m.email ? `<span class="text-muted text-sm">${escHtml(m.email)}</span>` : ''}
+          </label>`).join('')}
+      </div>`;
+  }).join('');
+}
+
+function toggleTaskAssignee(checkbox, name, email) {
+  if (checkbox.checked) {
+    taskAssigneeList.push({ name, email });
+  } else {
+    taskAssigneeList = taskAssigneeList.filter(a => a.email !== email);
+  }
+  refreshTaskAssigneeDisplay();
+}
+
+async function saveTask() {
+  const title    = document.getElementById('taskTitleInput').value.trim();
+  const desc     = document.getElementById('taskDescInput').value.trim();
+  const deadline = document.getElementById('taskDeadlineInput').value;
+  const dept     = document.getElementById('taskDeptInput').value.trim();
+  const listId   = document.getElementById('taskListSelect').value;
+  const errEl    = document.getElementById('taskModalError');
+
+  errEl.classList.add('hidden');
+  if (!title) { errEl.textContent = 'Title is required.'; errEl.classList.remove('hidden'); return; }
+
+  const btn = document.getElementById('confirmTaskBtn');
+  btn.disabled = true;
+
+  try {
+    const body = {
+      title, description: desc || null,
+      deadline: deadline || null,
+      department: dept || null,
+      list_id: listId || null,
+      assignments: taskAssigneeList,
+      adminCode: getAdminCode(),
+    };
+
+    const res = await fetch('/api/tasks', {
+      method: editingTaskId ? 'PUT' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(editingTaskId ? { ...body, id: editingTaskId } : body),
+    });
+    if (!res.ok) throw new Error((await res.json()).error || 'Failed.');
+    closeTaskModal();
+    showToast(editingTaskId ? 'Task updated.' : 'Task created!', 'success');
+    loadTasks();
+  } catch (e) {
+    errEl.textContent = e.message;
+    errEl.classList.remove('hidden');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function deleteTask(id) {
+  await fetch('/api/tasks', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id, adminCode: getAdminCode() }),
+  });
+  closeTaskDetail();
+  showToast('Task deleted.', 'success');
+  loadTasks();
+}
+
+// ── List create/delete ────────────────────────────────────
+function closeListModal() { hide('newListModal'); }
+
+async function saveList() {
+  const name = document.getElementById('listNameInput').value.trim();
+  const desc = document.getElementById('listDescInput').value.trim();
+  const errEl = document.getElementById('listModalError');
+  errEl.classList.add('hidden');
+  if (!name) { errEl.textContent = 'Name required.'; errEl.classList.remove('hidden'); return; }
+
+  const btn = document.getElementById('confirmListBtn');
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/task-lists', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, description: desc || null, adminCode: getAdminCode() }),
+    });
+    if (!res.ok) throw new Error((await res.json()).error || 'Failed.');
+    closeListModal();
+    document.getElementById('listNameInput').value = '';
+    document.getElementById('listDescInput').value = '';
+    showToast(`List "${name}" created!`, 'success');
+    loadTasks();
+  } catch (e) {
+    errEl.textContent = e.message;
+    errEl.classList.remove('hidden');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function deleteList(id) {
+  const list = allTaskLists.find(l => l.id === id);
+  if (!confirm(`Delete list "${list?.name}"? Tasks in it will move to General.`)) return;
+  await fetch('/api/task-lists', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id, adminCode: getAdminCode() }),
+  });
+  showToast('List deleted.', 'success');
+  loadTasks();
+}
+
+// ── Generate summary ──────────────────────────────────────
+function generateTaskSummary() {
+  const shared = allTasks.filter(t => !t.is_private && t.status !== 'complete');
+  if (!shared.length) { showToast('No active tasks to summarize.', 'success'); return; }
+
+  const lines = ['Tasks Update\n'];
+  const byList = new Map();
+  byList.set('General', []);
+  allTaskLists.forEach(l => byList.set(l.name, []));
+  shared.forEach(t => {
+    const key = t.list_id ? (allTaskLists.find(l => l.id === t.list_id)?.name || 'General') : 'General';
+    if (!byList.has(key)) byList.set(key, []);
+    byList.get(key).push(t);
+  });
+
+  byList.forEach((tasks, name) => {
+    if (!tasks.length) return;
+    lines.push(`\n${name}:`);
+    tasks.forEach(t => {
+      const status = t.status === 'in_progress' ? '[In Progress]' : '[To Do]';
+      const deadline = t.deadline ? ` (due ${new Date(t.deadline).toLocaleDateString()})` : '';
+      const assignees = (t.task_assignments || []).map(a => a.assignee_name || a.assignee_email).join(', ');
+      lines.push(`  ${status} ${t.title}${deadline}${assignees ? ` - ${assignees}` : ''}`);
+    });
+  });
+
+  navigator.clipboard.writeText(lines.join('\n'))
+    .then(() => showToast('Summary copied to clipboard!', 'success'))
+    .catch(() => showToast('Could not copy — try manually.', 'error'));
 }
 
 // ── Create schedule ────────────────────────────────────────
@@ -608,6 +1070,28 @@ function bindUI() {
   document.getElementById('closeEditScheduleModal').addEventListener('click', closeEditScheduleModal);
   document.getElementById('cancelEditSchedule').addEventListener('click', closeEditScheduleModal);
   document.getElementById('confirmEditSchedule').addEventListener('click', saveScheduleEdits);
+
+  // Tasks
+  document.getElementById('addPrivateTaskBtn').addEventListener('click', () => {
+    document.getElementById('privateTaskInput').classList.remove('hidden');
+    document.getElementById('privateTaskTitle').focus();
+  });
+  document.getElementById('privateTaskTitle').addEventListener('keydown', e => {
+    if (e.key === 'Enter') savePrivateTask();
+    if (e.key === 'Escape') cancelPrivateTask();
+  });
+  document.getElementById('newTaskBtn').addEventListener('click', () => {
+    if (!contactGroups.length) ensureContactsLoaded();
+    openTaskModal();
+  });
+  document.getElementById('newListBtn').addEventListener('click', () => show('newListModal'));
+  document.getElementById('generateSummaryBtn').addEventListener('click', generateTaskSummary);
+  document.getElementById('openAssignPickerBtn').addEventListener('click', () => {
+    const picker = document.getElementById('taskAssignPicker');
+    const isHidden = picker.classList.contains('hidden');
+    picker.classList.toggle('hidden', !isHidden);
+    if (isHidden) loadContactsForTaskPicker(taskAssigneeList);
+  });
 }
 
 function closeCreateModal() {

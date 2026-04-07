@@ -1317,3 +1317,198 @@ details[open] .contact-card-summary::before { content: '▾'; }
   .rec-times-grid { grid-template-columns: 1fr; }
   .group-card-actions { flex-direction: column; }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   TASKS SYSTEM
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── Private tasks box ─────────────────────────────────── */
+.task-private-box {
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: 14px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 0.5rem;
+}
+.task-private-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 600;
+  font-size: 0.9rem;
+  margin-bottom: 0.75rem;
+}
+.private-tasks-list { display: flex; flex-direction: column; gap: 0.35rem; }
+.private-task-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.private-task-row:last-child { border-bottom: none; }
+.private-task-check { display: flex; align-items: center; gap: 0.5rem; flex: 1; cursor: pointer; }
+.private-task-title { font-size: 0.875rem; }
+
+/* ── Task groups ───────────────────────────────────────── */
+.task-group {
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: 14px;
+  margin-bottom: 1rem;
+  overflow: hidden;
+}
+.task-group-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1.25rem;
+  background: var(--primary-pale);
+  border-bottom: 1px solid var(--border);
+}
+.task-group-name { font-weight: 700; font-size: 0.95rem; }
+.task-group-count { font-size: 0.8rem; color: var(--text-muted); }
+.task-list { padding: 0.5rem 0; }
+
+/* ── Task cards ────────────────────────────────────────── */
+.task-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.7rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.15s;
+}
+.task-card:last-child { border-bottom: none; }
+.task-card:hover { background: var(--primary-xpale); }
+.task-card-done { opacity: 0.6; }
+.task-card-mine { border-left: 3px solid var(--primary); }
+.task-card-left { padding-top: 0.15rem; }
+.task-card-body { flex: 1; min-width: 0; }
+.task-card-title { font-weight: 600; font-size: 0.9rem; margin-bottom: 0.3rem; }
+.task-card-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; }
+.task-done { text-decoration: line-through; color: var(--text-muted); }
+
+/* Status select in card */
+.task-status-select {
+  background: none;
+  border: none;
+  font-size: 0.75rem;
+  font-family: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0.2rem 0.1rem;
+  border-radius: 6px;
+  outline: none;
+}
+.task-status-select:hover { background: var(--border); }
+
+/* ── Tags / chips ──────────────────────────────────────── */
+.task-tag {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  background: var(--primary-pale);
+  color: var(--primary-deeper);
+}
+.tag-done { background: #dcfce7; color: #166534; }
+.task-chip {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  background: var(--surface2);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+.task-chip-me { background: var(--primary-pale); color: var(--primary-deeper); border-color: var(--primary-light); }
+.task-assignee-chips { display: flex; flex-wrap: wrap; gap: 0.25rem; }
+
+/* Avatar circle */
+.task-chip-avatar {
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  background: var(--primary);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+/* ── Deadline pills ────────────────────────────────────── */
+.task-deadline-pill {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.deadline-ok      { }
+.deadline-week    .task-deadline-pill, .task-deadline-pill.deadline-week    { background: #fef9c3; color: #854d0e; }
+.deadline-soon    .task-deadline-pill, .task-deadline-pill.deadline-soon    { background: #ffedd5; color: #9a3412; }
+.deadline-today   .task-deadline-pill, .task-deadline-pill.deadline-today   { background: #fee2e2; color: #991b1b; }
+.deadline-overdue .task-deadline-pill, .task-deadline-pill.deadline-overdue { background: #991b1b; color: white; }
+
+/* Card-level deadline tinting */
+.task-card.deadline-today   { border-left: 3px solid #f97316; }
+.task-card.deadline-overdue { border-left: 3px solid #ef4444; }
+.private-task-row.deadline-today   { border-left: 3px solid #f97316; padding-left: 0.4rem; }
+.private-task-row.deadline-overdue { border-left: 3px solid #ef4444; padding-left: 0.4rem; }
+
+/* ── Completed group (details/summary) ─────────────────── */
+.task-done-group { padding: 0 0.5rem; }
+.task-done-summary {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.825rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.task-done-summary:hover { color: var(--text); }
+
+/* ── Task detail modal pieces ──────────────────────────── */
+.task-detail-assignee {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.task-detail-assignee:last-child { border-bottom: none; }
+
+.task-comment {
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.task-comment:last-child { border-bottom: none; }
+.task-comment-author { font-size: 0.8rem; font-weight: 700; margin-bottom: 0.2rem; }
+.task-comment-body   { font-size: 0.875rem; white-space: pre-wrap; }
+.task-comment-time   { font-size: 0.75rem; margin-top: 0.15rem; }
+
+/* ── Task create modal — assignee rows ─────────────────── */
+.task-assignee-list { display: flex; flex-direction: column; gap: 0.35rem; min-height: 1rem; }
+.task-assignee-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  padding: 0.25rem 0;
+}
+
+/* ── Checkbox style ────────────────────────────────────── */
+.task-pub-check {
+  width: 1.1rem;
+  height: 1.1rem;
+  cursor: pointer;
+  accent-color: var(--primary);
+}
+
+/* ── Text danger ───────────────────────────────────────── */
+.text-danger { color: var(--danger); }
