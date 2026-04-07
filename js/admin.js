@@ -641,7 +641,10 @@ async function loadTasks() {
       badge.remove();
     }
   }
-  if (allTasks.filter(t => !t.is_private).length) show('tasksBody');
+  if (allTasks.filter(t => !t.is_private).length && taskViewMode === 'list') show('tasksBody');
+  refreshFocusPicker();
+  setDensity(taskDensity);
+  updateOverdueBanner();
 }
 
 // ── Private tasks ─────────────────────────────────────────
@@ -692,6 +695,8 @@ function cancelPrivateTask() {
 // ── Filter / search state ─────────────────────────────────
 let taskStatusFilter = 'all';
 let collapsedLists   = new Set();
+let focusAssignee    = '';
+let taskDensity      = (() => { try { return localStorage.getItem('claire_task_density') || 'comfortable'; } catch { return 'comfortable'; } })();
 
 function setTaskStatusFilter(btn) {
   document.querySelectorAll('#taskFilterChips .filter-chip').forEach(c => c.classList.remove('active'));
@@ -715,11 +720,21 @@ function onSortChange() {
 }
 
 function applyTaskFilters() {
+  // Delegate to the right view renderer if not in list mode
+  if (taskViewMode === 'kanban') { renderKanban(); updateOverdueBanner(); return; }
+  if (taskViewMode === 'timeline') { renderTimeline(); updateOverdueBanner(); return; }
+  if (taskViewMode === 'calendar') { renderCalendar(); updateOverdueBanner(); return; }
+
   const q = (document.getElementById('taskSearchInput')?.value || '').toLowerCase().trim();
   const shared = allTasks.filter(t => !t.is_private);
 
-  const filtered = shared.filter(t => {
-    if (taskStatusFilter !== 'all' && t.status !== taskStatusFilter) return false;
+  let filtered = shared.filter(t => {
+    // Status filter — 'overdue' is a special value
+    if (taskStatusFilter === 'overdue') {
+      if (deadlineClass(t.deadline) !== 'deadline-overdue' || t.status === 'complete') return false;
+    } else if (taskStatusFilter !== 'all' && t.status !== taskStatusFilter) {
+      return false;
+    }
     if (!q) return true;
     const inTitle    = t.title.toLowerCase().includes(q);
     const inList     = (t.todo_lists?.name || '').toLowerCase().includes(q);
@@ -730,39 +745,65 @@ function applyTaskFilters() {
     return inTitle || inList || inAssignee;
   });
 
+  // Focus assignee filter
+  if (focusAssignee) {
+    filtered = filtered.filter(t => (t.task_assignments || []).some(a => a.assignee_email === focusAssignee));
+  }
+
   hide('tasksEmpty');
   const noResults = document.getElementById('tasksNoResults');
 
   if (!filtered.length && shared.length) {
     hide('tasksBody');
     noResults?.classList.remove('hidden');
+    updateOverdueBanner();
     return;
   }
   noResults?.classList.add('hidden');
   renderSharedTasks(filtered);
   show('tasksBody');
+  updateOverdueBanner();
 }
 
-// ── Calendar view ─────────────────────────────────────────
-let taskViewMode  = 'list';   // 'list' | 'calendar'
+// ── View state ─────────────────────────────────────────────
+let taskViewMode  = 'list';   // 'list' | 'calendar' | 'kanban' | 'timeline'
 let calYear  = new Date().getFullYear();
 let calMonth = new Date().getMonth(); // 0-based
+let calHeatmapOn = false;
+let kanbanDragId = null;
+let timelineOffset = 0; // days from today to start of window
+const TIMELINE_DAYS = 30;
 
 function setTaskView(mode) {
   taskViewMode = mode;
-  document.getElementById('viewListBtn').classList.toggle('active', mode === 'list');
-  document.getElementById('viewCalBtn').classList.toggle('active',  mode === 'calendar');
-  const toolbar = document.getElementById('taskToolbar');
-  if (toolbar) toolbar.classList.toggle('hidden', mode === 'calendar');
+  ['list','cal','kanban','timeline'].forEach(v => {
+    const btnId = 'view' + v.charAt(0).toUpperCase() + v.slice(1) + 'Btn';
+    const modeKey = v === 'cal' ? 'calendar' : v;
+    document.getElementById(btnId)?.classList.toggle('active', mode === modeKey);
+  });
+
+  // Always keep toolbar visible (focus + density work in all views)
+  hide('tasksCalendarView');
+  hide('tasksBody');
+  hide('tasksNoResults');
+  hide('tasksKanbanView');
+  hide('tasksTimelineView');
+
   if (mode === 'list') {
-    hide('tasksCalendarView');
     applyTaskFilters();
-  } else {
-    hide('tasksBody');
-    hide('tasksNoResults');
+  } else if (mode === 'calendar') {
     show('tasksCalendarView');
     renderCalendar();
+  } else if (mode === 'kanban') {
+    show('tasksKanbanView');
+    setDensity(taskDensity);
+    renderKanban();
+  } else if (mode === 'timeline') {
+    show('tasksTimelineView');
+    renderTimeline();
   }
+
+  try { localStorage.setItem('claire_admin_view', 'tasks'); } catch {}
 }
 
 function calShiftMonth(delta) {
@@ -772,18 +813,247 @@ function calShiftMonth(delta) {
   renderCalendar();
 }
 
+// ── Heatmap toggle ─────────────────────────────────────────
+function toggleCalHeatmap() {
+  calHeatmapOn = !calHeatmapOn;
+  const btn = document.getElementById('calHeatmapBtn');
+  if (btn) btn.textContent = calHeatmapOn ? 'Heatmap: On' : 'Heatmap: Off';
+  renderCalendar();
+}
+
+// ── Density toggle ─────────────────────────────────────────
+function setDensity(d) {
+  taskDensity = d;
+  try { localStorage.setItem('claire_task_density', d); } catch {}
+  document.querySelectorAll('.density-btn').forEach(b => b.classList.toggle('active', b.dataset.density === d));
+  const body = document.getElementById('tasksBody');
+  if (body) { body.classList.remove('density-compact', 'density-comfortable', 'density-detailed'); body.classList.add('density-' + d); }
+  const kb = document.getElementById('tasksKanbanView');
+  if (kb) { kb.classList.remove('density-compact', 'density-comfortable', 'density-detailed'); kb.classList.add('density-' + d); }
+}
+
+// ── Focus (assignee filter) ────────────────────────────────
+function setFocusAssignee(email) {
+  focusAssignee = email;
+  if (taskViewMode === 'kanban') renderKanban();
+  else if (taskViewMode === 'timeline') renderTimeline();
+  else if (taskViewMode === 'calendar') renderCalendar();
+  else applyTaskFilters();
+}
+
+function refreshFocusPicker() {
+  const sel = document.getElementById('focusSelect');
+  if (!sel) return;
+  const seen = new Set();
+  const people = [];
+  allTasks.filter(t => !t.is_private).forEach(t => {
+    (t.task_assignments || []).forEach(a => {
+      if (!seen.has(a.assignee_email)) {
+        seen.add(a.assignee_email);
+        people.push({ name: a.assignee_name || a.assignee_email, email: a.assignee_email });
+      }
+    });
+  });
+  people.sort((a, b) => a.name.localeCompare(b.name));
+  const current = focusAssignee;
+  sel.innerHTML = `<option value="">\u{1F464} All people</option>` +
+    people.map(p => `<option value="${escHtml(p.email)}"${p.email === current ? ' selected' : ''}>${escHtml(p.name)}</option>`).join('');
+  if (focusAssignee) sel.value = focusAssignee;
+}
+
+// ── Overdue banner ─────────────────────────────────────────
+function updateOverdueBanner() {
+  const banner  = document.getElementById('overdueBanner');
+  const textEl  = document.getElementById('overdueBannerText');
+  if (!banner || !textEl) return;
+  const count = allTasks.filter(t =>
+    !t.is_private && t.status !== 'complete' && deadlineClass(t.deadline) === 'deadline-overdue'
+  ).length;
+  if (count > 0) {
+    textEl.textContent = `${count} task${count > 1 ? 's' : ''} overdue`;
+    banner.classList.remove('hidden');
+  } else {
+    banner.classList.add('hidden');
+  }
+}
+
+function filterToOverdue() {
+  // Set status filter chip to 'overdue' (special value)
+  taskStatusFilter = 'overdue';
+  document.querySelectorAll('#taskFilterChips .filter-chip').forEach(c => c.classList.remove('active'));
+  if (taskViewMode !== 'list') setTaskView('list');
+  else applyTaskFilters();
+}
+
+// ── Kanban board ───────────────────────────────────────────
+function renderKanban() {
+  const shared = allTasks.filter(t => !t.is_private);
+  const focused = focusAssignee
+    ? shared.filter(t => (t.task_assignments || []).some(a => a.assignee_email === focusAssignee))
+    : shared;
+
+  ['todo', 'in_progress', 'complete'].forEach(status => {
+    const tasks  = focused.filter(t => t.status === status);
+    const colId  = status === 'in_progress' ? 'kanbanInProgressBody'
+                 : status === 'todo'        ? 'kanbanTodoBody'
+                 :                            'kanbanCompleteBody';
+    const cntId  = status === 'in_progress' ? 'kanbanInProgressCount'
+                 : status === 'todo'        ? 'kanbanTodoCount'
+                 :                            'kanbanCompleteCount';
+    const bodyEl = document.getElementById(colId);
+    const cntEl  = document.getElementById(cntId);
+    if (bodyEl) bodyEl.innerHTML = tasks.map(t => kanbanCardHtml(t)).join('') || '<div class="kanban-empty">Drop tasks here</div>';
+    if (cntEl)  cntEl.textContent = tasks.length;
+  });
+}
+
+function kanbanCardHtml(t) {
+  const assignments = t.task_assignments || [];
+  const dClass    = deadlineClass(t.deadline);
+  const listName  = t.list_id ? (allTaskLists.find(l => l.id === t.list_id)?.name || '') : '';
+  const descHtml  = t.description && taskDensity === 'detailed'
+    ? `<div class="kanban-card-desc">${escHtml(t.description.slice(0, 80))}${t.description.length > 80 ? '\u2026' : ''}</div>` : '';
+  const avatars   = assignments.slice(0, 3).map(a =>
+    `<div class="task-chip-avatar" style="width:1.5rem;height:1.5rem;font-size:0.65rem;">${(a.assignee_name || a.assignee_email)[0].toUpperCase()}</div>`
+  ).join('');
+  const moreAv    = assignments.length > 3 ? `<span style="font-size:0.7rem;color:var(--text-muted);">+${assignments.length - 3}</span>` : '';
+
+  return `<div class="kanban-card ${dClass}" draggable="true"
+    ondragstart="kanbanDragId='${t.id}';event.dataTransfer.effectAllowed='move';"
+    ondragend="document.querySelectorAll('.kanban-col').forEach(c=>c.classList.remove('kanban-drag-over'))"
+    onclick="openTaskDetail('${t.id}')">
+    <div class="kanban-card-title">${escHtml(t.title)}</div>
+    ${descHtml}
+    <div class="kanban-card-meta">
+      ${listName ? `<span class="task-tag task-list-tag" style="font-size:0.7rem;">${escHtml(listName)}</span>` : ''}
+      ${t.deadline ? `<span class="task-deadline-pill ${dClass}" style="font-size:0.7rem;">${deadlineLabel(t.deadline)}</span>` : ''}
+    </div>
+    ${assignments.length ? `<div class="kanban-card-assignees">${avatars}${moreAv}</div>` : ''}
+  </div>`;
+}
+
+function kanbanDrop(event, status) {
+  event.preventDefault();
+  document.querySelectorAll('.kanban-col').forEach(c => c.classList.remove('kanban-drag-over'));
+  if (!kanbanDragId) return;
+  const task = allTasks.find(t => t.id === kanbanDragId);
+  if (!task || task.status === status) { kanbanDragId = null; return; }
+  task.status = status; // optimistic update
+  renderKanban();
+  updateTaskStatus(kanbanDragId, status);
+  kanbanDragId = null;
+}
+
+// ── Timeline / Gantt strip ─────────────────────────────────
+function timelineShift(delta) {
+  timelineOffset += delta;
+  renderTimeline();
+}
+
+function renderTimeline() {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const startDate = new Date(today); startDate.setDate(startDate.getDate() + timelineOffset);
+  const endDate   = new Date(startDate); endDate.setDate(endDate.getDate() + TIMELINE_DAYS - 1);
+
+  const startFmt = startDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  const endFmt   = endDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  const labelEl  = document.getElementById('timelineLabel');
+  if (labelEl) labelEl.textContent = `${startFmt} \u2013 ${endFmt}`;
+
+  const shared  = allTasks.filter(t => !t.is_private);
+  const focused = focusAssignee
+    ? shared.filter(t => (t.task_assignments || []).some(a => a.assignee_email === focusAssignee))
+    : shared;
+
+  const withDate = focused.filter(t => t.deadline);
+  const noDate   = focused.filter(t => !t.deadline);
+
+  const rowsEl = document.getElementById('timelineRows');
+  if (!rowsEl) return;
+
+  // Header row
+  let headerHtml = '<div class="tl-row tl-header-row"><div class="tl-task-label"></div><div class="tl-date-track">';
+  for (let i = 0; i < TIMELINE_DAYS; i++) {
+    const d = new Date(startDate); d.setDate(d.getDate() + i);
+    const isTodayCol = d.getTime() === today.getTime();
+    const showLabel  = (i === 0 || d.getDate() === 1 || i % 7 === 0);
+    const label = showLabel ? d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
+    headerHtml += `<div class="tl-cell tl-cell-header ${isTodayCol ? 'tl-today' : ''}">${label}</div>`;
+  }
+  headerHtml += '</div></div>';
+
+  // Task rows
+  let rowsHtml = '';
+  withDate.forEach(t => {
+    const deadline  = safeDate(t.deadline);
+    const dayOffset = Math.round((deadline - startDate) / 86400000);
+    const dClass    = deadlineClass(t.deadline);
+    const outLeft   = dayOffset < 0;
+    const outRight  = dayOffset >= TIMELINE_DAYS;
+
+    let cells = '';
+    for (let i = 0; i < TIMELINE_DAYS; i++) {
+      const d = new Date(startDate); d.setDate(d.getDate() + i);
+      const isTodayCol = d.getTime() === today.getTime();
+      const isMarker   = i === dayOffset;
+      cells += `<div class="tl-cell ${isTodayCol ? 'tl-today' : ''} ${isMarker ? 'tl-marker-cell' : ''}">` +
+        (isMarker ? `<div class="tl-marker ${dClass}" onclick="event.stopPropagation();openTaskDetail('${t.id}')" title="${escHtml(t.title)}"></div>` : '') +
+        `</div>`;
+    }
+
+    const outIndicator = outLeft
+      ? '<span style="font-size:0.65rem;color:var(--text-muted);">&#9664; before</span>'
+      : outRight
+      ? '<span style="font-size:0.65rem;color:var(--text-muted);">after &#9654;</span>'
+      : '';
+
+    rowsHtml += `
+      <div class="tl-row ${t.status === 'complete' ? 'tl-row-done' : ''}" onclick="openTaskDetail('${t.id}')">
+        <div class="tl-task-label">
+          <div class="tl-task-name">${escHtml(t.title)}</div>
+          ${outIndicator}
+          ${!outLeft && !outRight && t.deadline ? `<span class="task-deadline-pill ${dClass}" style="font-size:0.65rem;">${deadlineLabel(t.deadline)}</span>` : ''}
+        </div>
+        <div class="tl-date-track">${cells}</div>
+      </div>`;
+  });
+
+  rowsEl.innerHTML = headerHtml + (rowsHtml || '<p class="text-muted text-sm" style="padding:1rem 0 1rem 1rem;">No tasks with due dates in this window.</p>');
+
+  // No-date section
+  const ndEl   = document.getElementById('timelineNoDate');
+  const ndList = document.getElementById('timelineNoDateList');
+  if (ndEl && ndList) {
+    if (noDate.length) {
+      ndList.innerHTML = noDate.map(t => taskCardHtml(t, true)).join('');
+      ndEl.classList.remove('hidden');
+    } else {
+      ndEl.classList.add('hidden');
+    }
+  }
+}
+
 function renderCalendar() {
   const shared = allTasks.filter(t => !t.is_private);
+  const focused = focusAssignee
+    ? shared.filter(t => (t.task_assignments || []).some(a => a.assignee_email === focusAssignee))
+    : shared;
   const today  = new Date(); today.setHours(0,0,0,0);
 
   // Bucket tasks by YYYY-MM-DD string
   const byDay = {};
   const noDeadline = [];
-  shared.forEach(t => {
+  focused.forEach(t => {
     if (!t.deadline) { noDeadline.push(t); return; }
     const key = String(t.deadline).slice(0, 10);
     (byDay[key] = byDay[key] || []).push(t);
   });
+
+  // Heatmap: compute max tasks per day in this month
+  let maxTasks = 0;
+  if (calHeatmapOn) {
+    Object.values(byDay).forEach(arr => { if (arr.length > maxTasks) maxTasks = arr.length; });
+  }
 
   // Label
   const label = new Date(calYear, calMonth, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
@@ -810,8 +1080,15 @@ function renderCalendar() {
       return `<div class="cal-task-dot ${sc} ${deadlineClass(t.deadline)}" onclick="openTaskDetail('${t.id}')" title="${escHtml(t.title)}">${escHtml(t.title)}</div>`;
     }).join('');
 
+    let heatStyle = '';
+    if (calHeatmapOn && maxTasks > 0 && tasks.length > 0) {
+      const intensity = tasks.length / maxTasks;
+      const alpha = Math.round(intensity * 0.35 * 100) / 100;
+      heatStyle = ` style="background:rgba(234,179,8,${alpha});"`;
+    }
+
     html += `
-      <div class="cal-cell ${isToday ? 'cal-cell-today' : ''} ${tasks.length ? 'cal-cell-has-tasks' : ''}">
+      <div class="cal-cell ${isToday ? 'cal-cell-today' : ''} ${tasks.length ? 'cal-cell-has-tasks' : ''}"${heatStyle}>
         <div class="cal-day-num ${isToday ? 'cal-today-badge' : ''}">${d}</div>
         ${dots}
       </div>`;
@@ -888,11 +1165,16 @@ function renderSharedTasks(tasks) {
     const active = sorted.filter(t => t.status !== 'complete');
     const done   = sorted.filter(t => t.status === 'complete');
 
+    const total = active.length + done.length;
+    const pct   = total > 0 ? Math.round(done.length / total * 100) : 0;
+    const allDone = active.length === 0 && done.length > 0;
+    const progressColorClass = pct >= 80 ? 'progress-fill-green' : pct >= 40 ? 'progress-fill-amber' : 'progress-fill-grey';
+
     html += `
-      <div class="task-group ${collapsed ? 'task-group-collapsed' : ''}" data-list="${listId || ''}">
+      <div class="task-group ${collapsed ? 'task-group-collapsed' : ''} ${allDone ? 'task-group-complete' : ''}" data-list="${listId || ''}">
         <div class="task-group-header" onclick="toggleListCollapse('${colKey}')">
           <span class="task-group-chevron">${collapsed ? '›' : '⌄'}</span>
-          <span class="task-group-name">${escHtml(listName)}</span>
+          <span class="task-group-name">${escHtml(listName)}${allDone ? ' <span style="color:#166534;font-size:0.85rem;">&#10003; All done!</span>' : ''}</span>
           <span class="task-group-count">${active.length} active${done.length ? ` · ${done.length} done` : ''}</span>
           <button class="btn btn-ghost btn-sm task-group-copy-btn"
             onclick="event.stopPropagation();copyListSummary('${listId || ''}')" title="Copy summary">Copy Summary</button>
@@ -900,6 +1182,7 @@ function renderSharedTasks(tasks) {
             onclick="event.stopPropagation();clearCompletedTasks('${listId || ''}')" title="Delete completed tasks in this folder">Clear done</button>` : ''}
           ${listId ? `<button class="btn-icon text-danger" onclick="event.stopPropagation();deleteList('${listId}')" title="Delete folder">✕</button>` : ''}
         </div>
+        <div class="task-group-progress-bar"><div class="task-group-progress-fill ${progressColorClass}" style="width:${pct}%"></div></div>
         <div class="task-list">
           ${active.map(t => taskCardHtml(t)).join('')}
           ${done.length ? `
@@ -934,6 +1217,10 @@ function taskCardHtml(t, showListTag = false) {
     ? (allTaskLists.find(l => l.id === t.list_id)?.name || null)
     : null;
 
+  const descPreview = t.description
+    ? `<div class="task-card-desc">${escHtml(t.description.slice(0, 120))}${t.description.length > 120 ? '\u2026' : ''}</div>`
+    : '';
+
   return `
     <div class="task-card ${t.status === 'complete' ? 'task-card-done' : ''} ${dClass}"
          onclick="openTaskDetail('${t.id}')">
@@ -948,6 +1235,7 @@ function taskCardHtml(t, showListTag = false) {
       </div>
       <div class="task-card-body">
         <div class="task-card-title ${t.status === 'complete' ? 'task-done' : ''}">${escHtml(t.title)}</div>
+        ${descPreview}
         <div class="task-card-meta">
           ${listName    ? `<span class="task-tag task-list-tag">${escHtml(listName)}</span>` : ''}
           ${t.deadline  ? `<span class="task-deadline-pill ${dClass} deadline-pill-always">${deadlineLabel(t.deadline)}</span>` : ''}

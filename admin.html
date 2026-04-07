@@ -251,10 +251,12 @@
       <div class="groups-header" style="margin-top:1rem;">
         <div style="display:flex;align-items:center;gap:0.75rem;">
           <h2>Shared Tasks</h2>
-          <!-- List / Calendar toggle -->
+          <!-- List / Calendar / Kanban / Timeline toggle -->
           <div class="task-view-toggle">
-            <button class="task-view-btn active" id="viewListBtn" onclick="setTaskView('list')" title="List view">&#9776; List</button>
-            <button class="task-view-btn"        id="viewCalBtn"  onclick="setTaskView('calendar')" title="Calendar view">&#9635; Calendar</button>
+            <button class="task-view-btn active" id="viewListBtn"     onclick="setTaskView('list')"     title="List view">&#9776; List</button>
+            <button class="task-view-btn"        id="viewCalBtn"      onclick="setTaskView('calendar')" title="Calendar view">&#9635; Calendar</button>
+            <button class="task-view-btn"        id="viewKanbanBtn"   onclick="setTaskView('kanban')"   title="Kanban board">&#8999; Kanban</button>
+            <button class="task-view-btn"        id="viewTimelineBtn" onclick="setTaskView('timeline')" title="Timeline">&#8596; Timeline</button>
           </div>
         </div>
         <div style="display:flex;gap:0.5rem;align-items:center;">
@@ -284,6 +286,21 @@
           <input type="checkbox" id="taskFlatToggle" onchange="applyTaskFilters()" style="accent-color:var(--primary);cursor:pointer;" />
           Flat view
         </label>
+        <div class="density-toggle" id="densityToggle">
+          <button class="density-btn" data-density="compact"      onclick="setDensity('compact')"      title="Compact">&#9636;</button>
+          <button class="density-btn active" data-density="comfortable" onclick="setDensity('comfortable')" title="Comfortable">&#9638;</button>
+          <button class="density-btn" data-density="detailed"     onclick="setDensity('detailed')"     title="Detailed">&#9639;</button>
+        </div>
+        <select id="focusSelect" class="sort-select" onchange="setFocusAssignee(this.value)" title="Focus on one person">
+          <option value="">&#128100; All people</option>
+        </select>
+      </div>
+
+      <!-- Overdue banner -->
+      <div id="overdueBanner" class="hidden overdue-banner">
+        <span class="icon-emoji">&#9888;&#65039;</span>
+        <span id="overdueBannerText"></span>
+        <button class="btn-link" style="color:#991b1b;margin-left:0.5rem;" onclick="filterToOverdue()">View overdue</button>
       </div>
 
       <div id="tasksLoading" class="loading-state">
@@ -301,11 +318,67 @@
           <button class="btn btn-ghost btn-sm" onclick="calShiftMonth(-1)">&#8249;</button>
           <span class="cal-month-label" id="calMonthLabel"></span>
           <button class="btn btn-ghost btn-sm" onclick="calShiftMonth(1)">&#8250;</button>
+          <button class="btn btn-ghost btn-sm" id="calHeatmapBtn" onclick="toggleCalHeatmap()" title="Toggle workload heatmap" style="margin-left:0.5rem;font-size:0.75rem;">Heatmap: Off</button>
         </div>
         <div class="cal-grid" id="calGrid"></div>
         <div id="calNoDeadline" class="hidden" style="margin-top:1.25rem;">
           <div class="task-group-name" style="margin-bottom:0.5rem;color:var(--text-muted);font-size:0.8rem;text-transform:uppercase;letter-spacing:.05em;">No deadline</div>
           <div id="calNoDeadlineList"></div>
+        </div>
+      </div>
+
+      <!-- Kanban view -->
+      <div id="tasksKanbanView" class="hidden">
+        <div class="kanban-board">
+          <div class="kanban-col" id="kanbanTodoCol"
+               ondragover="event.preventDefault()"
+               ondragenter="this.classList.add('kanban-drag-over')"
+               ondragleave="this.classList.remove('kanban-drag-over')"
+               ondrop="kanbanDrop(event,'todo')">
+            <div class="kanban-col-header todo-header">
+              <span class="kanban-col-title">To Do</span>
+              <span class="kanban-col-count" id="kanbanTodoCount">0</span>
+            </div>
+            <div class="kanban-col-body" id="kanbanTodoBody"></div>
+          </div>
+          <div class="kanban-col" id="kanbanInProgressCol"
+               ondragover="event.preventDefault()"
+               ondragenter="this.classList.add('kanban-drag-over')"
+               ondragleave="this.classList.remove('kanban-drag-over')"
+               ondrop="kanbanDrop(event,'in_progress')">
+            <div class="kanban-col-header inprogress-header">
+              <span class="kanban-col-title">In Progress</span>
+              <span class="kanban-col-count" id="kanbanInProgressCount">0</span>
+            </div>
+            <div class="kanban-col-body" id="kanbanInProgressBody"></div>
+          </div>
+          <div class="kanban-col" id="kanbanCompleteCol"
+               ondragover="event.preventDefault()"
+               ondragenter="this.classList.add('kanban-drag-over')"
+               ondragleave="this.classList.remove('kanban-drag-over')"
+               ondrop="kanbanDrop(event,'complete')">
+            <div class="kanban-col-header complete-header">
+              <span class="kanban-col-title">Complete</span>
+              <span class="kanban-col-count" id="kanbanCompleteCount">0</span>
+            </div>
+            <div class="kanban-col-body" id="kanbanCompleteBody"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Timeline view -->
+      <div id="tasksTimelineView" class="hidden">
+        <div class="cal-nav" style="margin-bottom:0.5rem;">
+          <button class="btn btn-ghost btn-sm" onclick="timelineShift(-30)">&#8249;</button>
+          <span id="timelineLabel" class="cal-month-label"></span>
+          <button class="btn btn-ghost btn-sm" onclick="timelineShift(30)">&#8250;</button>
+        </div>
+        <div class="timeline-wrap">
+          <div class="timeline-rows" id="timelineRows"></div>
+        </div>
+        <div id="timelineNoDate" class="hidden" style="margin-top:1.25rem;">
+          <div class="task-group-name" style="margin-bottom:0.5rem;color:var(--text-muted);font-size:0.8rem;text-transform:uppercase;letter-spacing:.05em;">No due date</div>
+          <div id="timelineNoDateList"></div>
         </div>
       </div>
 

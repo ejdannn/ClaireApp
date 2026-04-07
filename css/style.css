@@ -1879,3 +1879,213 @@ details[open] .contact-card-summary::before { content: '▾'; }
 .task-group-collapsed .task-list { display: none; }
 .task-group-collapsed .task-done-group { display: none; }
 .task-group-collapsed .task-group-chevron { transform: rotate(-90deg); }
+
+/* ── Feature 1: Folder progress bar ─────────────────────── */
+.task-group-progress-bar {
+  width: 100%;
+  height: 4px;
+  background: #e5e7eb;
+  overflow: hidden;
+}
+.task-group-progress-fill {
+  height: 4px;
+  border-radius: 0;
+  transition: width 0.3s ease;
+}
+.progress-fill-green { background: #22c55e; }
+.progress-fill-amber { background: #f59e0b; }
+.progress-fill-grey  { background: #d1d5db; }
+
+/* ── Feature 2: All-done group celebration ───────────────── */
+.task-group.task-group-complete .task-group-header { background: #dcfce7; }
+.task-group.task-group-complete .task-group-name   { color: #166534; }
+
+/* ── Feature 3: Overdue banner ───────────────────────────── */
+.overdue-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #fee2e2;
+  border: 1.5px solid #fca5a5;
+  border-radius: 10px;
+  padding: 0.6rem 1rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #991b1b;
+}
+
+/* ── Feature 4: Density toggle ───────────────────────────── */
+.density-toggle {
+  display: flex;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.density-btn {
+  background: var(--surface);
+  border: none;
+  padding: 0.3rem 0.6rem;
+  font-size: 1rem;
+  cursor: pointer;
+  color: var(--text-muted);
+  border-right: 1px solid var(--border);
+  transition: background 0.15s;
+}
+.density-btn:last-child { border-right: none; }
+.density-btn:hover { background: var(--primary-pale); }
+.density-btn.active { background: var(--primary-pale); color: var(--primary-deeper); }
+
+/* Compact density */
+.density-compact .task-card { padding: 0.35rem 1rem; }
+.density-compact .task-card-meta { display: none; }
+.density-compact .task-card-title { font-size: 0.85rem; }
+
+/* Detailed density */
+.density-detailed .task-card { padding: 0.85rem 1.25rem; align-items: flex-start; }
+.task-card-desc { font-size: 0.8rem; color: var(--text-muted); margin-top: 0.2rem; line-height: 1.4; display: none; }
+.density-detailed .task-card-desc { display: block; }
+
+/* ── Feature 6: Kanban board ─────────────────────────────── */
+.kanban-board {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+.kanban-col {
+  background: var(--surface2);
+  border-radius: 12px;
+  overflow: hidden;
+  min-height: 200px;
+  transition: background 0.15s;
+}
+.kanban-col.kanban-drag-over {
+  background: var(--primary-pale);
+  outline: 2px dashed var(--primary);
+}
+.kanban-col-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  font-weight: 700;
+}
+.kanban-col-header.todo-header       { background: #f1f5f9; }
+.kanban-col-header.inprogress-header { background: var(--primary-pale); color: var(--primary-deeper); }
+.kanban-col-header.complete-header   { background: #dcfce7; color: #166534; }
+.kanban-col-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 99px;
+  background: rgba(0,0,0,0.08);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.kanban-col-title { font-size: 0.875rem; }
+.kanban-col-body {
+  padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-height: 100px;
+}
+.kanban-card {
+  background: #fff;
+  border-radius: 10px;
+  padding: 0.7rem 0.85rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  cursor: grab;
+  border-left: 3px solid transparent;
+  transition: box-shadow 0.15s, transform 0.1s;
+}
+.kanban-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.12); transform: translateY(-1px); }
+.kanban-card:active { cursor: grabbing; }
+.kanban-card.deadline-overdue { border-left-color: #ef4444; }
+.kanban-card.deadline-today   { border-left-color: #f97316; }
+.kanban-card.deadline-soon    { border-left-color: #eab308; }
+.kanban-card-title    { font-size: 0.875rem; font-weight: 600; margin-bottom: 0.3rem; }
+.kanban-card-desc     { font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.3rem; line-height: 1.4; }
+.kanban-card-meta     { display: flex; gap: 0.3rem; flex-wrap: wrap; margin-top: 0.3rem; }
+.kanban-card-assignees { display: flex; gap: 0.2rem; align-items: center; margin-top: 0.4rem; }
+.kanban-empty { padding: 1rem; text-align: center; color: var(--text-muted); font-size: 0.8rem; font-style: italic; }
+
+/* Compact kanban */
+.density-compact .kanban-card { padding: 0.4rem 0.65rem; }
+.density-compact .kanban-card-meta { display: none; }
+.density-compact .kanban-card-assignees { display: none; }
+
+/* ── Feature 7: Timeline / Gantt ─────────────────────────── */
+.timeline-wrap {
+  overflow-x: auto;
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+}
+.tl-row {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  min-height: 2.5rem;
+  cursor: pointer;
+}
+.tl-row:last-child { border-bottom: none; }
+.tl-row:hover { background: var(--primary-xpale, #f0f4ff); }
+.tl-row-done { opacity: 0.5; }
+.tl-header-row { cursor: default; background: var(--surface2); }
+.tl-header-row:hover { background: var(--surface2); }
+.tl-task-label {
+  width: 180px;
+  min-width: 180px;
+  padding: 0.4rem 0.75rem;
+  border-right: 1px solid var(--border);
+  overflow: hidden;
+}
+.tl-task-name {
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
+}
+.tl-date-track { display: flex; flex: 1; position: relative; }
+.tl-cell {
+  flex: 1;
+  min-width: 28px;
+  height: 2.5rem;
+  border-right: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+.tl-cell:last-child { border-right: none; }
+.tl-cell-header {
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.tl-today { background: rgba(99,102,241,0.08); }
+.tl-marker {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--primary);
+  cursor: pointer;
+  transition: transform 0.1s;
+  flex-shrink: 0;
+}
+.tl-marker:hover { transform: scale(1.4); }
+.tl-marker.deadline-overdue { background: #ef4444; }
+.tl-marker.deadline-today   { background: #f97316; }
+.tl-marker.deadline-soon    { background: #eab308; }
+.tl-marker.deadline-week    { background: #f59e0b; }
+.tl-marker.deadline-2wk     { background: #84cc16; }
+.tl-marker.deadline-month   { background: #22c55e; }
+.tl-marker.deadline-far     { background: #86efac; }
