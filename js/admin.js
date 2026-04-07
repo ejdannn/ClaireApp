@@ -577,18 +577,20 @@ function deadlineClass(deadline) {
   const dt = safeDate(deadline);
   if (!dt) return '';
   const days = (dt - new Date()) / 86400000;
-  if (days < 0)  return 'deadline-overdue';
-  if (days < 1)  return 'deadline-today';
-  if (days < 3)  return 'deadline-soon';
-  if (days < 7)  return 'deadline-week';
-  return 'deadline-ok';
+  if (days < 0)   return 'deadline-overdue';
+  if (days < 1)   return 'deadline-today';
+  if (days < 3)   return 'deadline-soon';
+  if (days < 7)   return 'deadline-week';
+  if (days < 14)  return 'deadline-2wk';
+  if (days < 30)  return 'deadline-month';
+  return 'deadline-far';
 }
 
 function deadlineLabel(deadline) {
   const dt = safeDate(deadline);
   if (!dt) return '';
   const days = Math.ceil((dt - new Date()) / 86400000);
-  if (days < 0)  return `Overdue by ${Math.abs(days)}d`;
+  if (days < 0)   return `Overdue by ${Math.abs(days)}d`;
   if (days === 0) return 'Due today';
   if (days === 1) return 'Due tomorrow';
   return `Due in ${days}d`;
@@ -893,7 +895,7 @@ function renderSharedTasks(tasks) {
           <span class="task-group-name">${escHtml(listName)}</span>
           <span class="task-group-count">${active.length} active${done.length ? ` · ${done.length} done` : ''}</span>
           <button class="btn btn-ghost btn-sm task-group-copy-btn"
-            onclick="event.stopPropagation();copyListSummary('${listId || ''}')" title="Copy summary">Copy</button>
+            onclick="event.stopPropagation();copyListSummary('${listId || ''}')" title="Copy summary">Copy Summary</button>
           ${done.length ? `<button class="btn btn-danger-ghost btn-sm"
             onclick="event.stopPropagation();clearCompletedTasks('${listId || ''}')" title="Delete completed tasks in this folder">Clear done</button>` : ''}
           ${listId ? `<button class="btn-icon text-danger" onclick="event.stopPropagation();deleteList('${listId}')" title="Delete folder">✕</button>` : ''}
@@ -948,7 +950,7 @@ function taskCardHtml(t, showListTag = false) {
         <div class="task-card-title ${t.status === 'complete' ? 'task-done' : ''}">${escHtml(t.title)}</div>
         <div class="task-card-meta">
           ${listName    ? `<span class="task-tag task-list-tag">${escHtml(listName)}</span>` : ''}
-          ${t.deadline  ? `<span class="task-deadline-pill ${dClass}">${deadlineLabel(t.deadline)}</span>` : ''}
+          ${t.deadline  ? `<span class="task-deadline-pill ${dClass} deadline-pill-always">${deadlineLabel(t.deadline)}</span>` : ''}
           ${assignments.length ? assignments.map(a =>
             `<span class="task-chip">${escHtml(a.assignee_name || a.assignee_email)}</span>`).join('') : ''}
         </div>
