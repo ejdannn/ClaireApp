@@ -207,18 +207,23 @@ export async function onRequestDelete(context) {
     return new Response(JSON.stringify({ error: 'Invalid body' }), { status: 400, headers: CORS });
   }
 
-  const { adminCode, id } = body;
+  const { adminCode, id, ids } = body;
   if (adminCode !== env.ADMIN_CODE) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: CORS });
   }
 
-  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/tasks?id=eq.${id}`, {
+  // Bulk delete: ids=[...] or single: id='...'
+  const filter = (ids && ids.length)
+    ? `id=in.(${ids.join(',')})`
+    : `id=eq.${id}`;
+
+  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/tasks?${filter}`, {
     method: 'DELETE',
     headers: {
       'apikey': env.SUPABASE_SERVICE_ROLE_KEY,
       'Authorization': `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
     },
   });
-  if (!res.ok) return new Response(JSON.stringify({ error: 'Failed to delete task.' }), { status: 500, headers: CORS });
+  if (!res.ok) return new Response(JSON.stringify({ error: 'Failed to delete task(s).' }), { status: 500, headers: CORS });
   return new Response(JSON.stringify({ success: true }), { status: 200, headers: CORS });
 }

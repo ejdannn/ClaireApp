@@ -135,6 +135,16 @@ small { font-size: 0.8125rem; }
   transform: translateY(-1px);
 }
 
+.btn-danger-ghost {
+  background: transparent;
+  color: var(--danger);
+  border-color: transparent;
+}
+.btn-danger-ghost:hover:not(:disabled) {
+  background: var(--danger-light, #fee2e2);
+  border-color: var(--danger);
+}
+
 .btn-sm { padding: 0.4rem 0.9rem; font-size: 0.8125rem; }
 .btn-lg { padding: 0.85rem 2rem; font-size: 1rem; }
 .btn-full { width: 100%; }

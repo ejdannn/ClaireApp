@@ -257,8 +257,9 @@
             <button class="task-view-btn"        id="viewCalBtn"  onclick="setTaskView('calendar')" title="Calendar view">&#9635; Calendar</button>
           </div>
         </div>
-        <div style="display:flex;gap:0.5rem;">
+        <div style="display:flex;gap:0.5rem;align-items:center;">
           <button class="btn btn-secondary btn-sm" id="generateSummaryBtn">Copy All Summary</button>
+          <button class="btn btn-danger-ghost btn-sm" id="clearAllDoneBtn" onclick="clearCompletedTasks(null)" title="Delete all completed tasks across every list">Clear all done</button>
           <button class="btn btn-secondary btn-sm" id="newListBtn">+ New List</button>
           <button class="btn btn-primary" id="newTaskBtn">+ New Task</button>
         </div>

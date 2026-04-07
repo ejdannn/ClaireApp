@@ -706,7 +706,8 @@ function onSortChange() {
     const isDueSort = sortMode !== 'default';
     wrap.classList.toggle('hidden', !isDueSort);
     wrap.style.display = isDueSort ? 'flex' : 'none';
-    if (!isDueSort && checkbox) checkbox.checked = false;
+    if (isDueSort && checkbox) checkbox.checked = true;   // auto flat on due-date sort
+    if (!isDueSort && checkbox) checkbox.checked = false; // reset when back to default
   }
   applyTaskFilters();
 }
@@ -849,7 +850,10 @@ function renderSharedTasks(tasks) {
     html += active.map(t => taskCardHtml(t, true)).join('');
     if (done.length) {
       html += `<details class="task-done-group">
-        <summary class="task-done-summary">${done.length} completed</summary>
+        <summary class="task-done-summary">${done.length} completed
+          <button class="btn btn-danger-ghost btn-sm" style="margin-left:0.75rem;"
+            onclick="event.stopPropagation();event.preventDefault();clearCompletedTasks(null)">Clear done</button>
+        </summary>
         ${done.map(t => taskCardHtml(t, true)).join('')}
       </details>`;
     }
@@ -890,6 +894,8 @@ function renderSharedTasks(tasks) {
           <span class="task-group-count">${active.length} active${done.length ? ` · ${done.length} done` : ''}</span>
           <button class="btn btn-ghost btn-sm task-group-copy-btn"
             onclick="event.stopPropagation();copyListSummary('${listId || ''}')" title="Copy summary">Copy</button>
+          ${done.length ? `<button class="btn btn-danger-ghost btn-sm"
+            onclick="event.stopPropagation();clearCompletedTasks('${listId || ''}')" title="Delete completed tasks in this list">Clear done</button>` : ''}
           ${listId ? `<button class="btn-icon text-danger" onclick="event.stopPropagation();deleteList('${listId}')" title="Delete list">✕</button>` : ''}
         </div>
         <div class="task-list">
@@ -1213,6 +1219,35 @@ async function deleteTask(id) {
   closeTaskDetail();
   showToast('Task deleted.', 'success');
   loadTasks();
+}
+
+// ── Clear completed tasks ─────────────────────────────────
+async function clearCompletedTasks(listId) {
+  // listId = null → all lists; listId = '' → General; listId = uuid → specific list
+  const shared    = allTasks.filter(t => !t.is_private && t.status === 'complete');
+  const toDelete  = listId === null
+    ? shared
+    : shared.filter(t => (t.list_id || '') === (listId || ''));
+
+  if (!toDelete.length) {
+    showToast('No completed tasks to clear.', 'info');
+    return;
+  }
+
+  const scope = listId === null ? 'all lists' : (listId ? (allTaskLists.find(l => l.id === listId)?.name || 'this list') : 'General');
+  if (!confirm(`Delete ${toDelete.length} completed task${toDelete.length > 1 ? 's' : ''} from ${scope}? This cannot be undone.`)) return;
+
+  const ids = toDelete.map(t => t.id);
+  const res = await fetch('/api/tasks', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids, adminCode: getAdminCode() }),
+  });
+  if (!res.ok) { showToast('Failed to clear tasks.', 'error'); return; }
+
+  allTasks = allTasks.filter(t => !ids.includes(t.id));
+  showToast(`Cleared ${ids.length} completed task${ids.length > 1 ? 's' : ''}.`, 'success');
+  applyTaskFilters();
 }
 
 // ── List create/delete ────────────────────────────────────
