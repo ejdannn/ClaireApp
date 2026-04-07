@@ -274,11 +274,15 @@
           <button class="filter-chip"        data-status="in_progress" onclick="setTaskStatusFilter(this)">In Progress</button>
           <button class="filter-chip"        data-status="complete"    onclick="setTaskStatusFilter(this)">Complete</button>
         </div>
-        <select id="taskSortSelect" class="sort-select" onchange="applyTaskFilters()">
+        <select id="taskSortSelect" class="sort-select" onchange="onSortChange()">
           <option value="default">Sort: Default</option>
           <option value="due_asc">Sort: Due Date ↑</option>
           <option value="due_desc">Sort: Due Date ↓</option>
         </select>
+        <label id="taskFlatToggleWrap" class="hidden" style="display:none;align-items:center;gap:0.4rem;font-size:0.8rem;font-weight:500;color:var(--text-muted);cursor:pointer;white-space:nowrap;">
+          <input type="checkbox" id="taskFlatToggle" onchange="applyTaskFilters()" style="accent-color:var(--primary);cursor:pointer;" />
+          Flat view
+        </label>
       </div>
 
       <div id="tasksLoading" class="loading-state">

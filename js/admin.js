@@ -38,6 +38,10 @@ function getMembersInAdminTz() {
   setupGoogleAuth();
   await loadGroups();
   bindUI();
+
+  // Restore last active tab
+  const lastView = (() => { try { return localStorage.getItem('claire_admin_view'); } catch { return null; } })();
+  if (lastView && lastView !== 'schedules') switchMainView(lastView);
 })();
 
 
@@ -553,6 +557,7 @@ function switchMainView(view) {
   });
   if (view === 'contacts') loadContactGroups();
   if (view === 'tasks') loadTasks();
+  try { localStorage.setItem('claire_admin_view', view); } catch {}
 }
 
 // ══════════════════════════════════════════════════════════
@@ -693,6 +698,19 @@ function setTaskStatusFilter(btn) {
   applyTaskFilters();
 }
 
+function onSortChange() {
+  const sortMode = document.getElementById('taskSortSelect')?.value || 'default';
+  const wrap     = document.getElementById('taskFlatToggleWrap');
+  const checkbox = document.getElementById('taskFlatToggle');
+  if (wrap) {
+    const isDueSort = sortMode !== 'default';
+    wrap.classList.toggle('hidden', !isDueSort);
+    wrap.style.display = isDueSort ? 'flex' : 'none';
+    if (!isDueSort && checkbox) checkbox.checked = false;
+  }
+  applyTaskFilters();
+}
+
 function applyTaskFilters() {
   const q = (document.getElementById('taskSearchInput')?.value || '').toLowerCase().trim();
   const shared = allTasks.filter(t => !t.is_private);
@@ -810,18 +828,37 @@ function renderCalendar() {
 }
 
 function renderSharedTasks(tasks) {
-  const body = document.getElementById('tasksBody');
+  const body       = document.getElementById('tasksBody');
   const sortMode   = document.getElementById('taskSortSelect')?.value || 'default';
+  const flatMode   = sortMode !== 'default' && document.getElementById('taskFlatToggle')?.checked;
   const statusOrder = { in_progress: 0, todo: 1, complete: 2 };
 
-  // For due-date sort: flatten, sort, then re-group so within each group tasks are due-date ordered
   function dueSortFn(a, b) {
     const da = a.deadline ? safeDate(a.deadline).getTime() : Infinity;
     const db = b.deadline ? safeDate(b.deadline).getTime() : Infinity;
     return sortMode === 'due_desc' ? db - da : da - db;
   }
 
-  // Group by list
+  // ── FLAT VIEW (sorted by due date, no group headers) ──
+  if (flatMode) {
+    const sorted = [...tasks].sort(dueSortFn);
+    const active = sorted.filter(t => t.status !== 'complete');
+    const done   = sorted.filter(t => t.status === 'complete');
+
+    let html = `<div class="task-group" style="border-radius:12px;overflow:hidden;"><div class="task-list">`;
+    html += active.map(t => taskCardHtml(t, true)).join('');
+    if (done.length) {
+      html += `<details class="task-done-group">
+        <summary class="task-done-summary">${done.length} completed</summary>
+        ${done.map(t => taskCardHtml(t, true)).join('')}
+      </details>`;
+    }
+    html += `</div></div>`;
+    body.innerHTML = tasks.length ? html : '<p class="text-muted text-sm" style="padding:1rem;">No tasks yet.</p>';
+    return;
+  }
+
+  // ── GROUPED VIEW ──
   const groups = new Map();
   groups.set(null, []);
   allTaskLists.forEach(l => groups.set(l.id, []));
@@ -882,9 +919,12 @@ function toggleListCollapse(colKey) {
 const STATUS_LABELS = { todo: 'To Do', in_progress: 'In Progress', complete: 'Complete' };
 const STATUS_COLORS = { todo: '', in_progress: 'status-inprogress', complete: 'status-complete' };
 
-function taskCardHtml(t) {
+function taskCardHtml(t, showListTag = false) {
   const assignments = t.task_assignments || [];
-  const dClass = deadlineClass(t.deadline);
+  const dClass      = deadlineClass(t.deadline);
+  const listName    = showListTag && t.list_id
+    ? (allTaskLists.find(l => l.id === t.list_id)?.name || null)
+    : null;
 
   return `
     <div class="task-card ${t.status === 'complete' ? 'task-card-done' : ''} ${dClass}"
@@ -901,7 +941,8 @@ function taskCardHtml(t) {
       <div class="task-card-body">
         <div class="task-card-title ${t.status === 'complete' ? 'task-done' : ''}">${escHtml(t.title)}</div>
         <div class="task-card-meta">
-          ${t.deadline   ? `<span class="task-deadline-pill ${dClass}">${deadlineLabel(t.deadline)}</span>` : ''}
+          ${listName    ? `<span class="task-tag task-list-tag">${escHtml(listName)}</span>` : ''}
+          ${t.deadline  ? `<span class="task-deadline-pill ${dClass}">${deadlineLabel(t.deadline)}</span>` : ''}
           ${assignments.length ? assignments.map(a =>
             `<span class="task-chip">${escHtml(a.assignee_name || a.assignee_email)}</span>`).join('') : ''}
         </div>
