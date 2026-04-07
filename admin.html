@@ -46,7 +46,7 @@
     <nav class="admin-main-nav">
       <button class="admin-nav-btn active" id="navSchedules" onclick="switchMainView('schedules')"><span class="icon-emoji">📅</span> Schedules</button>
       <button class="admin-nav-btn" id="navContacts" onclick="switchMainView('contacts')"><span class="icon-emoji">👥</span> Contacts</button>
-      <button class="admin-nav-btn" id="navTasks" onclick="switchMainView('tasks')"><span class="icon-emoji">✅</span> Tasks</button>
+      <button class="admin-nav-btn" id="navTasks" onclick="switchMainView('tasks')"><span style="font-weight:700;">✓</span> Tasks</button>
     </nav>
 
     <!-- Schedules section -->
@@ -238,14 +238,22 @@
         </div>
       </div>
 
+      <!-- Share link banner -->
+      <div class="task-share-banner" id="taskShareBanner">
+        <div class="task-share-banner-left">
+          <span style="font-weight:700;font-size:0.9rem;">Share this link with your team</span>
+          <span class="text-muted text-sm" id="taskShareUrl" style="font-family:monospace;"></span>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="copyTasksLink()">Copy Link</button>
+      </div>
+
       <!-- Shared tasks header -->
-      <div class="groups-header" style="margin-top:1.5rem;">
+      <div class="groups-header" style="margin-top:1rem;">
         <div>
           <h2>Shared Tasks</h2>
-          <p class="text-muted text-sm" style="margin-top:0.25rem;">Assign tasks to your team. Share the <a href="/tasks" target="_blank" style="color:var(--primary);text-decoration:none;">public tasks page</a> so they can see and check off their work.</p>
         </div>
         <div style="display:flex;gap:0.5rem;">
-          <button class="btn btn-secondary btn-sm" id="generateSummaryBtn">📋 Copy Summary</button>
+          <button class="btn btn-secondary btn-sm" id="generateSummaryBtn">Copy All Summary</button>
           <button class="btn btn-secondary btn-sm" id="newListBtn">+ New List</button>
           <button class="btn btn-primary" id="newTaskBtn">+ New Task</button>
         </div>
@@ -259,7 +267,7 @@
       <div id="tasksBody" class="hidden"></div>
 
       <div id="tasksEmpty" class="empty-state hidden">
-        <div class="empty-icon">✅</div>
+        <div class="empty-icon" style="font-size:2rem;font-weight:700;color:var(--primary);">✓</div>
         <h3>No tasks yet</h3>
         <p>Create your first task and assign it to your team.</p>
         <button class="btn btn-primary" onclick="document.getElementById('newTaskBtn').click()">Create First Task</button>
@@ -299,7 +307,7 @@
       <div class="form-group">
         <label for="taskListSelect">Sub-list</label>
         <select id="taskListSelect">
-          <option value="">— No list —</option>
+          <option value="">No list</option>
         </select>
       </div>
       <div class="form-group">

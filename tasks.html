@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Claire Tasks</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>✅</text></svg>" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>✓</text></svg>" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/css/style.css" />
@@ -16,7 +16,7 @@
   <header class="admin-header">
     <div class="admin-header-inner">
       <div class="admin-brand">
-        <span class="admin-brand-icon icon-emoji">✅</span>
+        <span class="admin-brand-icon" style="font-size:1.4rem;line-height:1;">✓</span>
         Claire Tasks
       </div>
       <div id="userBadge" class="hidden" style="display:flex;align-items:center;gap:0.75rem;">
@@ -32,7 +32,7 @@
     <!-- Sign-in screen -->
     <div id="signInView" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;gap:1.5rem;">
       <div style="text-align:center;">
-        <div style="font-size:3rem;margin-bottom:0.5rem;">✅</div>
+        <div style="font-size:3rem;margin-bottom:0.5rem;font-weight:700;color:var(--primary);">✓</div>
         <h2 style="margin:0 0 0.5rem;">Claire Tasks</h2>
         <p class="text-muted" style="max-width:320px;">Sign in with your Google account to see tasks assigned to you.</p>
       </div>
@@ -58,7 +58,7 @@
 
       <div style="margin-top:2rem;">
         <h2 style="margin-bottom:0.25rem;">All Tasks</h2>
-        <p class="text-muted text-sm" style="margin-bottom:1rem;">Browse everything — only your assigned tasks can be checked off.</p>
+        <p class="text-muted text-sm" style="margin-bottom:1rem;">Browse everything. Only your assigned tasks can be changed.</p>
         <div id="allTasksList"></div>
       </div>
 

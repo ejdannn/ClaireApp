@@ -216,7 +216,12 @@ async function setPubTaskStatus(taskId, newStatus) {
 function renderAllTasks() {
   const el = document.getElementById('allTasksList');
   const statusOrder = { in_progress: 0, todo: 1, complete: 2 };
-  const sorted = [...publicTasks].sort((a, b) => (statusOrder[a.status] ?? 1) - (statusOrder[b.status] ?? 1));
+  // Exclude tasks already shown in "Your Tasks"
+  const myEmails = new Set(currentUserEmail ? [currentUserEmail] : []);
+  const nonMyTasks = publicTasks.filter(t =>
+    !(t.task_assignments || []).some(a => myEmails.has(a.assignee_email))
+  );
+  const sorted = [...nonMyTasks].sort((a, b) => (statusOrder[a.status] ?? 1) - (statusOrder[b.status] ?? 1));
 
   if (!sorted.length) {
     el.innerHTML = '<p class="text-muted text-sm" style="padding:0.5rem 0;">No tasks yet.</p>';

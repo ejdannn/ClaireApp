@@ -1533,6 +1533,43 @@ details[open] .contact-card-summary::before { content: '▾'; }
 /* ── Text danger ───────────────────────────────────────── */
 .text-danger { color: var(--danger); }
 
+/* ── Task share banner ─────────────────────────────────── */
+.task-share-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  background: var(--primary-pale);
+  border: 2px solid var(--primary-light);
+  border-radius: 12px;
+  padding: 0.85rem 1.1rem;
+  margin-top: 1rem;
+}
+.task-share-banner-left {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+/* ── Status dropdown on admin task cards ────────────────── */
+.task-status-dropdown {
+  font-size: 0.775rem;
+  font-family: inherit;
+  font-weight: 600;
+  padding: 0.3rem 0.5rem;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+  max-width: 110px;
+}
+.task-status-dropdown:hover { border-color: var(--primary-light); }
+.task-status-dropdown.status-inprogress { border-color: var(--primary-dark); background: var(--primary-pale); color: var(--primary-dark); }
+.task-status-dropdown.status-complete   { border-color: var(--success); background: #dcfce7; color: #166534; }
+
 /* ── Status badge on admin task cards ──────────────────── */
 .task-status-badge {
   width: 1.6rem;

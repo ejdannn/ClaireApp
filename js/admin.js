@@ -581,9 +581,19 @@ function deadlineLabel(deadline) {
   return `Due in ${days}d`;
 }
 
+// ── Share link ────────────────────────────────────────────
+function copyTasksLink() {
+  const url = `${location.origin}/tasks`;
+  navigator.clipboard.writeText(url)
+    .then(() => showToast('Link copied!', 'success'))
+    .catch(() => showToast('Could not copy.', 'error'));
+}
+
 // ── Load tasks + lists ────────────────────────────────────
 async function loadTasks() {
   show('tasksLoading'); hide('tasksBody'); hide('tasksEmpty');
+  const shareUrl = document.getElementById('taskShareUrl');
+  if (shareUrl) shareUrl.textContent = `${location.origin}/tasks`;
 
   const [tasksRes, listsRes] = await Promise.all([
     fetch(`/api/tasks?adminCode=${encodeURIComponent(getAdminCode())}`),
@@ -682,7 +692,9 @@ function renderSharedTasks(tasks) {
         <div class="task-group-header">
           <span class="task-group-name">${escHtml(listName)}</span>
           <span class="task-group-count">${active.length} active${done.length ? ` · ${done.length} done` : ''}</span>
-          ${listId ? `<button class="btn-icon text-danger" onclick="deleteList('${listId}')" title="Delete list" style="margin-left:auto;">✕</button>` : ''}
+          <button class="btn btn-ghost btn-sm" style="margin-left:auto;font-size:0.75rem;padding:0.2rem 0.5rem;"
+            onclick="copyListSummary('${listId || ''}')" title="Copy summary for this list">Copy Summary</button>
+          ${listId ? `<button class="btn-icon text-danger" onclick="deleteList('${listId}')" title="Delete list">✕</button>` : ''}
         </div>
         <div class="task-list">
           ${active.map(t => taskCardHtml(t)).join('')}
@@ -709,15 +721,17 @@ function taskCardHtml(t) {
     <div class="task-card ${t.status === 'complete' ? 'task-card-done' : ''} ${dClass}"
          onclick="openTaskDetail('${t.id}')">
       <div class="task-card-left" onclick="event.stopPropagation()">
-        <div class="task-status-badge ${STATUS_COLORS[t.status] || ''}" title="Click to change status"
-             onclick="cycleTaskStatus(event, '${t.id}', '${t.status}')">
-          ${t.status === 'complete' ? '✓' : t.status === 'in_progress' ? '▶' : '○'}
-        </div>
+        <select class="task-status-dropdown ${STATUS_COLORS[t.status] || ''}"
+                onclick="event.stopPropagation()"
+                onchange="event.stopPropagation(); this.className='task-status-dropdown '+(STATUS_COLORS[this.value]||''); updateTaskStatus('${t.id}', this.value)">
+          <option value="todo"        ${t.status==='todo'        ?'selected':''}>To Do</option>
+          <option value="in_progress" ${t.status==='in_progress' ?'selected':''}>In Progress</option>
+          <option value="complete"    ${t.status==='complete'    ?'selected':''}>Complete</option>
+        </select>
       </div>
       <div class="task-card-body">
         <div class="task-card-title ${t.status === 'complete' ? 'task-done' : ''}">${escHtml(t.title)}</div>
         <div class="task-card-meta">
-          ${t.status !== 'todo' ? `<span class="task-tag ${STATUS_COLORS[t.status]}">${STATUS_LABELS[t.status]}</span>` : ''}
           ${t.department ? `<span class="task-tag">${escHtml(t.department)}</span>` : ''}
           ${t.deadline   ? `<span class="task-deadline-pill ${dClass}">${deadlineLabel(t.deadline)}</span>` : ''}
           ${assignments.length ? assignments.map(a =>
@@ -725,13 +739,6 @@ function taskCardHtml(t) {
         </div>
       </div>
     </div>`;
-}
-
-function cycleTaskStatus(e, id, currentStatus) {
-  e.stopPropagation();
-  const order = ['todo', 'in_progress', 'complete'];
-  const next = order[(order.indexOf(currentStatus) + 1) % order.length];
-  updateTaskStatus(id, next);
 }
 
 async function updateTaskStatus(id, status) {
@@ -1040,6 +1047,25 @@ async function deleteList(id) {
   });
   showToast('List deleted.', 'success');
   loadTasks();
+}
+
+// ── Copy summary for one list ─────────────────────────────
+function copyListSummary(listId) {
+  const listName = listId ? (allTaskLists.find(l => l.id === listId)?.name || 'General') : 'General';
+  const tasks = allTasks.filter(t =>
+    !t.is_private && t.status !== 'complete' && (t.list_id || null) === (listId || null)
+  );
+  if (!tasks.length) { showToast('No active tasks in this list.', 'success'); return; }
+  const lines = [`${listName} Tasks\n`];
+  tasks.forEach(t => {
+    const status    = t.status === 'in_progress' ? '[In Progress]' : '[To Do]';
+    const deadline  = t.deadline ? ` (due ${new Date(t.deadline).toLocaleDateString()})` : '';
+    const assignees = (t.task_assignments || []).map(a => a.assignee_name || a.assignee_email).join(', ');
+    lines.push(`  ${status} ${t.title}${deadline}${assignees ? ` - ${assignees}` : ''}`);
+  });
+  navigator.clipboard.writeText(lines.join('\n'))
+    .then(() => showToast(`"${listName}" summary copied!`, 'success'))
+    .catch(() => showToast('Could not copy.', 'error'));
 }
 
 // ── Generate summary ──────────────────────────────────────
