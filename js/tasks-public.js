@@ -62,24 +62,49 @@ function signOut() {
   document.getElementById('userBadge').style.display = 'none';
 }
 
-// ── Name search helper ────────────────────────────────────
+// ── Name search helper (checks tasks + all contacts) ─────
+let nameSearchTimer = null;
 function searchByName(query) {
   const el = document.getElementById('nameSearchResults');
-  if (!query.trim()) { el.innerHTML = ''; return; }
-  const q = query.toLowerCase();
-  const found = new Set();
-  publicTasks.forEach(t => {
-    (t.task_assignments || []).forEach(a => {
-      if ((a.assignee_name || '').toLowerCase().includes(q) ||
-          (a.assignee_email || '').toLowerCase().includes(q)) {
-        found.add(a.assignee_email);
-      }
+  if (!query.trim() || query.length < 2) { el.innerHTML = ''; return; }
+
+  clearTimeout(nameSearchTimer);
+  nameSearchTimer = setTimeout(async () => {
+    el.innerHTML = '<span style="color:var(--text-muted);font-size:0.8rem;">Searching…</span>';
+    const q = query.toLowerCase();
+    const found = new Map(); // email → name
+
+    // 1. Check task assignments
+    publicTasks.forEach(t => {
+      (t.task_assignments || []).forEach(a => {
+        if ((a.assignee_name || '').toLowerCase().includes(q) ||
+            (a.assignee_email || '').toLowerCase().includes(q)) {
+          found.set(a.assignee_email, a.assignee_name || a.assignee_email);
+        }
+      });
     });
-  });
-  if (!found.size) { el.innerHTML = '<span style="color:var(--text-muted);">No matches found.</span>'; return; }
-  el.innerHTML = [...found].map(e =>
-    `<div style="padding:0.15rem 0;">Sign in as: <strong>${escHtml(e)}</strong></div>`
-  ).join('');
+
+    // 2. Check all contacts
+    try {
+      const res = await fetch(`/api/contacts-search?name=${encodeURIComponent(query)}`);
+      if (res.ok) {
+        const contacts = await res.json();
+        contacts.forEach(c => {
+          if (c.email && !found.has(c.email)) found.set(c.email, c.name || c.email);
+        });
+      }
+    } catch { /* ignore */ }
+
+    if (!found.size) {
+      el.innerHTML = '<span style="color:var(--text-muted);font-size:0.875rem;">No matches found.</span>';
+      return;
+    }
+    el.innerHTML = [...found.entries()].map(([email, name]) =>
+      `<div style="padding:0.2rem 0;font-size:0.875rem;">
+        ${name !== email ? `<strong>${escHtml(name)}</strong> — ` : ''}Sign in as: <strong>${escHtml(email)}</strong>
+      </div>`
+    ).join('');
+  }, 300);
 }
 
 // ── Load tasks ────────────────────────────────────────────
@@ -136,14 +161,14 @@ function renderMyTasks() {
     ...done,
   ];
 
-  el.innerHTML = [
-    ...active.map(t => myTaskCardHtml(t)),
-    done.length ? `
+  el.innerHTML = `<div class="task-pub-list">
+    ${active.map(t => myTaskCardHtml(t)).join('')}
+    ${done.length ? `
       <details class="task-done-group">
         <summary class="task-done-summary">${done.length} completed task${done.length > 1 ? 's' : ''}</summary>
-        ${done.map(t => myTaskCardHtml(t)).join('')}
-      </details>` : '',
-  ].join('');
+        <div class="task-pub-list" style="margin-top:0.4rem;">${done.map(t => myTaskCardHtml(t)).join('')}</div>
+      </details>` : ''}
+  </div>`;
 }
 
 function myTaskCardHtml(t) {
@@ -151,15 +176,16 @@ function myTaskCardHtml(t) {
   const isDone = !!myAssignment?.completed_at;
   const dClass = deadlineClass(t.deadline);
   return `
-    <div class="task-card ${isDone ? 'task-card-done' : ''} ${dClass}" onclick="openPubTaskDetail('${t.id}')">
-      <div class="task-card-left">
+    <div class="task-pub-card ${isDone ? 'task-card-done' : ''} ${dClass} task-card-mine"
+         onclick="openPubTaskDetail('${t.id}')">
+      <div style="flex-shrink:0;">
         <input type="checkbox" class="task-pub-check" ${isDone ? 'checked' : ''}
           onclick="event.stopPropagation()"
           onchange="toggleMyTask('${t.id}', this.checked)" />
       </div>
-      <div class="task-card-body">
+      <div style="flex:1;min-width:0;">
         <div class="task-card-title ${isDone ? 'task-done' : ''}">${escHtml(t.title)}</div>
-        <div class="task-card-meta">
+        <div class="task-card-meta" style="margin-top:0.25rem;">
           ${t.department ? `<span class="task-tag">${escHtml(t.department)}</span>` : ''}
           ${t.deadline   ? `<span class="task-deadline-pill ${dClass}">${deadlineLabel(t.deadline)}</span>` : ''}
           ${t.description ? `<span class="task-tag" style="background:var(--surface2);color:var(--text-muted);">Has details</span>` : ''}
@@ -193,16 +219,16 @@ function renderAllTasks() {
     return;
   }
 
-  el.innerHTML = sorted.map(t => {
+  const statusLabels = { todo: 'To Do', in_progress: 'In Progress', complete: 'Complete' };
+  el.innerHTML = `<div class="task-pub-list">${sorted.map(t => {
     const isMine = (t.task_assignments || []).some(a => a.assignee_email === currentUserEmail);
     const dClass = deadlineClass(t.deadline);
-    const statusLabels = { todo: 'To Do', in_progress: 'In Progress', complete: 'Complete' };
     return `
-      <div class="task-card ${t.status === 'complete' ? 'task-card-done' : ''} ${dClass} ${isMine ? 'task-card-mine' : ''}"
+      <div class="task-pub-card ${t.status === 'complete' ? 'task-card-done' : ''} ${dClass} ${isMine ? 'task-card-mine' : ''}"
            onclick="openPubTaskDetail('${t.id}')">
-        <div class="task-card-body">
+        <div style="flex:1;min-width:0;">
           <div class="task-card-title ${t.status === 'complete' ? 'task-done' : ''}">${escHtml(t.title)}</div>
-          <div class="task-card-meta">
+          <div class="task-card-meta" style="margin-top:0.25rem;">
             ${t.department ? `<span class="task-tag">${escHtml(t.department)}</span>` : ''}
             ${t.deadline   ? `<span class="task-deadline-pill ${dClass}">${deadlineLabel(t.deadline)}</span>` : ''}
             <span class="task-tag" style="background:var(--surface2);color:var(--text-muted);">${statusLabels[t.status] || t.status}</span>
@@ -213,7 +239,7 @@ function renderAllTasks() {
         </div>
         <div class="task-card-arrow">›</div>
       </div>`;
-  }).join('');
+  }).join('')}</div>`;
 }
 
 // ── Task detail modal (public) ────────────────────────────
