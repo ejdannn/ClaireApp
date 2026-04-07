@@ -811,7 +811,15 @@ function renderCalendar() {
 
 function renderSharedTasks(tasks) {
   const body = document.getElementById('tasksBody');
+  const sortMode   = document.getElementById('taskSortSelect')?.value || 'default';
   const statusOrder = { in_progress: 0, todo: 1, complete: 2 };
+
+  // For due-date sort: flatten, sort, then re-group so within each group tasks are due-date ordered
+  function dueSortFn(a, b) {
+    const da = a.deadline ? safeDate(a.deadline).getTime() : Infinity;
+    const db = b.deadline ? safeDate(b.deadline).getTime() : Infinity;
+    return sortMode === 'due_desc' ? db - da : da - db;
+  }
 
   // Group by list
   const groups = new Map();
@@ -829,9 +837,13 @@ function renderSharedTasks(tasks) {
     const listName  = listId ? (allTaskLists.find(l => l.id === listId)?.name || 'Unknown') : 'General';
     const colKey    = listId || 'null';
     const collapsed = collapsedLists.has(colKey);
-    const sorted    = [...groupTasks].sort((a, b) => (statusOrder[a.status] ?? 1) - (statusOrder[b.status] ?? 1));
-    const active    = sorted.filter(t => t.status !== 'complete');
-    const done      = sorted.filter(t => t.status === 'complete');
+    const sorted = [...groupTasks].sort(
+      sortMode === 'default'
+        ? (a, b) => (statusOrder[a.status] ?? 1) - (statusOrder[b.status] ?? 1)
+        : dueSortFn
+    );
+    const active = sorted.filter(t => t.status !== 'complete');
+    const done   = sorted.filter(t => t.status === 'complete');
 
     html += `
       <div class="task-group ${collapsed ? 'task-group-collapsed' : ''}" data-list="${listId || ''}">
@@ -1012,6 +1024,8 @@ function openTaskModal(task = null) {
   document.getElementById('taskDescInput').value  = task?.description || '';
   document.getElementById('taskDeadlineInput').value = task?.deadline ? task.deadline.slice(0,10) : '';
   document.getElementById('taskModalError').classList.add('hidden');
+  // Reset inline list form if open
+  toggleInlineNewList(false);
 
   // Populate list select
   const sel = document.getElementById('taskListSelect');
@@ -1162,6 +1176,48 @@ async function deleteTask(id) {
 
 // ── List create/delete ────────────────────────────────────
 function closeListModal() { hide('newListModal'); }
+
+// ── Inline list creation (inside task modal) ──────────────
+function toggleInlineNewList(forceOpen) {
+  const form  = document.getElementById('inlineNewListForm');
+  const input = document.getElementById('inlineListNameInput');
+  const isHidden = form.classList.contains('hidden');
+  const open  = forceOpen !== undefined ? forceOpen : isHidden;
+  form.classList.toggle('hidden', !open);
+  if (open) { input.value = ''; setTimeout(() => input.focus(), 50); }
+}
+
+async function saveInlineList() {
+  const input = document.getElementById('inlineListNameInput');
+  const name  = input.value.trim();
+  if (!name) { input.focus(); return; }
+
+  const btn = document.querySelector('#inlineNewListForm .btn-primary');
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/task-lists', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, adminCode: getAdminCode() }),
+    });
+    if (!res.ok) throw new Error((await res.json()).error || 'Failed.');
+    const newList = await res.json();
+    // Add to in-memory list and select it immediately
+    allTaskLists.push(newList);
+    const sel = document.getElementById('taskListSelect');
+    const opt = document.createElement('option');
+    opt.value = newList.id;
+    opt.textContent = name;
+    opt.selected = true;
+    sel.appendChild(opt);
+    toggleInlineNewList(false);
+    showToast(`List "${name}" created!`, 'success');
+  } catch (e) {
+    showToast(e.message, 'error');
+  } finally {
+    btn.disabled = false;
+  }
+}
 
 async function saveList() {
   const name = document.getElementById('listNameInput').value.trim();

@@ -274,6 +274,11 @@
           <button class="filter-chip"        data-status="in_progress" onclick="setTaskStatusFilter(this)">In Progress</button>
           <button class="filter-chip"        data-status="complete"    onclick="setTaskStatusFilter(this)">Complete</button>
         </div>
+        <select id="taskSortSelect" class="sort-select" onchange="applyTaskFilters()">
+          <option value="default">Sort: Default</option>
+          <option value="due_asc">Sort: Due Date ↑</option>
+          <option value="due_desc">Sort: Due Date ↓</option>
+        </select>
       </div>
 
       <div id="tasksLoading" class="loading-state">
@@ -332,10 +337,21 @@
         <input type="date" id="taskDeadlineInput" />
       </div>
       <div class="form-group">
-        <label for="taskListSelect">List</label>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.35rem;">
+          <label for="taskListSelect" style="margin:0;">List</label>
+          <button type="button" class="btn-link" id="inlineNewListBtn" onclick="toggleInlineNewList()">+ New list</button>
+        </div>
         <select id="taskListSelect">
           <option value="">— No list —</option>
         </select>
+        <!-- Inline new-list mini-form -->
+        <div id="inlineNewListForm" class="hidden" style="margin-top:0.5rem;display:flex;gap:0.4rem;align-items:center;">
+          <input type="text" id="inlineListNameInput" placeholder="List name…"
+            style="flex:1;padding:0.35rem 0.6rem;border:1.5px solid var(--border);border-radius:8px;font-size:0.85rem;font-family:inherit;"
+            onkeydown="if(event.key==='Enter'){event.preventDefault();saveInlineList();}if(event.key==='Escape')toggleInlineNewList(false);" />
+          <button type="button" class="btn btn-primary btn-sm" onclick="saveInlineList()">Add</button>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="toggleInlineNewList(false)">Cancel</button>
+        </div>
       </div>
       <div class="form-group">
         <label>Assign to</label>
