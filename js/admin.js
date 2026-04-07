@@ -859,26 +859,42 @@ function removeTaskAssignee(idx) {
 }
 
 function loadContactsForTaskPicker(currentAssignments) {
-  const picker = document.getElementById('taskAssignPicker');
+  renderAssignPickerWith('', currentAssignments);
+}
+
+function filterAssignPicker(query) {
+  renderAssignPickerWith(query, taskAssigneeList);
+}
+
+function renderAssignPickerWith(query, currentAssignments) {
+  const list = document.getElementById('taskAssignPickerList');
   if (!contactGroups.length) {
-    picker.innerHTML = '<span class="text-muted text-sm">No contacts loaded. Go to Contacts tab first.</span>';
+    list.innerHTML = '<span class="text-muted text-sm">No contacts loaded — visit Contacts tab first.</span>';
     return;
   }
   const assignedEmails = new Set((currentAssignments || taskAssigneeList).map(a => a.email || a.assignee_email));
-  picker.innerHTML = contactGroups.map(g => {
-    const available = (g.members || []).filter(m => !assignedEmails.has(m.email));
+  const q = (query || '').toLowerCase();
+
+  const html = contactGroups.map(g => {
+    const available = (g.members || []).filter(m => {
+      if (assignedEmails.has(m.email)) return false;
+      if (!q) return true;
+      return (m.name || '').toLowerCase().includes(q) || (m.email || '').toLowerCase().includes(q);
+    });
     if (!available.length) return '';
     return `
-      <div style="margin-bottom:0.5rem;">
-        <div class="text-sm" style="font-weight:600;color:var(--text-muted);margin-bottom:0.25rem;">${escHtml(g.name)}</div>
+      <div style="margin-bottom:0.4rem;">
+        ${q ? '' : `<div class="text-sm" style="font-weight:600;color:var(--text-muted);margin-bottom:0.2rem;">${escHtml(g.name)}</div>`}
         ${available.map(m => `
           <label class="contact-picker-item" style="display:flex;align-items:center;gap:0.5rem;padding:0.3rem 0.4rem;cursor:pointer;border-radius:6px;">
             <input type="checkbox" onchange="toggleTaskAssignee(this, '${escHtml(m.name)}', '${escHtml(m.email)}')" />
-            <span>${escHtml(m.name || m.email)}</span>
-            ${m.email ? `<span class="text-muted text-sm">${escHtml(m.email)}</span>` : ''}
+            <span style="font-weight:500;">${escHtml(m.name || m.email)}</span>
+            ${m.email && m.name ? `<span class="text-muted text-sm" style="margin-left:auto;">${escHtml(m.email)}</span>` : ''}
           </label>`).join('')}
       </div>`;
   }).join('');
+
+  list.innerHTML = html || '<span class="text-muted text-sm">No matches.</span>';
 }
 
 function toggleTaskAssignee(checkbox, name, email) {
@@ -1090,7 +1106,12 @@ function bindUI() {
     const picker = document.getElementById('taskAssignPicker');
     const isHidden = picker.classList.contains('hidden');
     picker.classList.toggle('hidden', !isHidden);
-    if (isHidden) loadContactsForTaskPicker(taskAssigneeList);
+    if (isHidden) {
+      document.getElementById('assignPickerSearch').value = '';
+      if (!contactGroups.length) ensureContactsLoaded();
+      loadContactsForTaskPicker(taskAssigneeList);
+      setTimeout(() => document.getElementById('assignPickerSearch').focus(), 50);
+    }
   });
 }
 
@@ -2315,9 +2336,4 @@ function syncContactsToExpected() {
   textarea.value = [...manualLines, ...checkedEntries].join('\n');
 }
 
-// ── DOM helpers ───────────────────────────────────────────
-function show(id) { document.getElementById(id)?.classList.remove('hidden'); }
-function hide(id) { document.getElementById(id)?.classList.add('hidden'); }
-function escHtml(str) {
-  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
+// show/hide/escHtml defined in utils.js

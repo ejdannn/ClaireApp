@@ -5,24 +5,39 @@
 let currentUserEmail = null, currentUserName = null, currentIdToken = null;
 let publicTasks = [], openDetailTaskId = null;
 
-// ── Google Sign-In ────────────────────────────────────────
+// ── Init ──────────────────────────────────────────────────
 window.addEventListener('load', () => {
-  google.accounts.id.initialize({
-    client_id: GOOGLE_CLIENT_ID,
-    callback: handleCredential,
-  });
-  google.accounts.id.renderButton(
-    document.getElementById('googleSignInBtn'),
-    { theme: 'outline', size: 'large', text: 'signin_with' }
-  );
+  const clientId = window.CLAIRE_CONFIG?.googleClientId;
+  if (!clientId) {
+    document.getElementById('googleSignInBtn').innerHTML =
+      '<p class="text-muted text-sm" style="color:var(--danger)">Google sign-in not configured.</p>';
+    return;
+  }
+
+  try {
+    google.accounts.id.initialize({ client_id: clientId, callback: handleCredential });
+    google.accounts.id.renderButton(
+      document.getElementById('googleSignInBtn'),
+      { theme: 'outline', size: 'large', text: 'signin_with', shape: 'rectangular' }
+    );
+  } catch (e) {
+    document.getElementById('googleSignInBtn').innerHTML =
+      '<p class="text-muted text-sm">Could not load Google sign-in. Please refresh.</p>';
+  }
+
   loadPublicTasks();
 });
 
+// ── Google credential handler ─────────────────────────────
 function handleCredential(response) {
   currentIdToken = response.credential;
-  const payload = JSON.parse(atob(response.credential.split('.')[1]));
-  currentUserEmail = payload.email;
-  currentUserName  = payload.name || payload.email;
+  try {
+    const payload = JSON.parse(atob(response.credential.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    currentUserEmail = payload.email;
+    currentUserName  = payload.name || payload.email;
+  } catch {
+    showToast('Could not read sign-in info.', 'error'); return;
+  }
   showSignedIn();
   renderMyTasks();
   renderAllTasks();
@@ -34,8 +49,9 @@ function showSignedIn() {
   const avatar = document.getElementById('userAvatar');
   avatar.textContent = (currentUserName || currentUserEmail)[0].toUpperCase();
   document.getElementById('userName').textContent = currentUserName || currentUserEmail;
-  document.getElementById('userBadge').classList.remove('hidden');
-  document.getElementById('userBadge').style.display = 'flex';
+  const badge = document.getElementById('userBadge');
+  badge.classList.remove('hidden');
+  badge.style.display = 'flex';
 }
 
 function signOut() {
@@ -43,37 +59,42 @@ function signOut() {
   currentUserEmail = null; currentUserName = null; currentIdToken = null;
   hide('tasksView');
   show('signInView');
-  document.getElementById('userBadge').classList.add('hidden');
+  document.getElementById('userBadge').style.display = 'none';
 }
 
 // ── Name search helper ────────────────────────────────────
 function searchByName(query) {
   const el = document.getElementById('nameSearchResults');
-  if (!query.trim() || !publicTasks.length) { el.innerHTML = ''; return; }
+  if (!query.trim()) { el.innerHTML = ''; return; }
   const q = query.toLowerCase();
   const found = new Set();
   publicTasks.forEach(t => {
     (t.task_assignments || []).forEach(a => {
-      if ((a.assignee_name || '').toLowerCase().includes(q)) {
+      if ((a.assignee_name || '').toLowerCase().includes(q) ||
+          (a.assignee_email || '').toLowerCase().includes(q)) {
         found.add(a.assignee_email);
       }
     });
   });
-  if (!found.size) { el.innerHTML = 'No matches found.'; return; }
-  el.innerHTML = [...found].map(e => `<div>Try signing in as: <strong>${escHtml(e)}</strong></div>`).join('');
+  if (!found.size) { el.innerHTML = '<span style="color:var(--text-muted);">No matches found.</span>'; return; }
+  el.innerHTML = [...found].map(e =>
+    `<div style="padding:0.15rem 0;">Sign in as: <strong>${escHtml(e)}</strong></div>`
+  ).join('');
 }
 
 // ── Load tasks ────────────────────────────────────────────
 async function loadPublicTasks() {
   show('tasksPublicLoading');
-  const res = await fetch('/api/tasks');
-  hide('tasksPublicLoading');
-  if (!res.ok) { showToast('Failed to load tasks.', 'error'); return; }
-  publicTasks = await res.json();
-  if (currentUserEmail) {
-    renderMyTasks();
-    renderAllTasks();
+  try {
+    const res = await fetch('/api/tasks');
+    if (!res.ok) throw new Error();
+    publicTasks = await res.json();
+  } catch {
+    showToast('Failed to load tasks.', 'error');
+  } finally {
+    hide('tasksPublicLoading');
   }
+  if (currentUserEmail) { renderMyTasks(); renderAllTasks(); }
 }
 
 // ── Deadline helpers ──────────────────────────────────────
@@ -84,7 +105,7 @@ function deadlineClass(deadline) {
   if (days < 1)  return 'deadline-today';
   if (days < 3)  return 'deadline-soon';
   if (days < 7)  return 'deadline-week';
-  return 'deadline-ok';
+  return '';
 }
 
 function deadlineLabel(deadline) {
@@ -104,16 +125,24 @@ function renderMyTasks() {
   const el = document.getElementById('myTasksList');
 
   if (!myTasks.length) {
-    el.innerHTML = '<p class="text-muted text-sm">No tasks assigned to you yet.</p>';
+    el.innerHTML = '<p class="text-muted text-sm" style="padding:0.5rem 0;">No tasks assigned to you yet.</p>';
     return;
   }
 
   const active = myTasks.filter(t => t.status !== 'complete');
   const done   = myTasks.filter(t => t.status === 'complete');
+  const sorted = [
+    ...active.sort((a, b) => (a.deadline || 'z').localeCompare(b.deadline || 'z')),
+    ...done,
+  ];
 
   el.innerHTML = [
     ...active.map(t => myTaskCardHtml(t)),
-    done.length ? `<details class="task-done-group"><summary class="task-done-summary">${done.length} completed</summary>${done.map(t => myTaskCardHtml(t)).join('')}</details>` : '',
+    done.length ? `
+      <details class="task-done-group">
+        <summary class="task-done-summary">${done.length} completed task${done.length > 1 ? 's' : ''}</summary>
+        ${done.map(t => myTaskCardHtml(t)).join('')}
+      </details>` : '',
   ].join('');
 }
 
@@ -121,9 +150,8 @@ function myTaskCardHtml(t) {
   const myAssignment = (t.task_assignments || []).find(a => a.assignee_email === currentUserEmail);
   const isDone = !!myAssignment?.completed_at;
   const dClass = deadlineClass(t.deadline);
-
   return `
-    <div class="task-card ${isDone ? 'task-card-done' : ''} ${dClass}" style="cursor:pointer;" onclick="openPubTaskDetail('${t.id}')">
+    <div class="task-card ${isDone ? 'task-card-done' : ''} ${dClass}" onclick="openPubTaskDetail('${t.id}')">
       <div class="task-card-left">
         <input type="checkbox" class="task-pub-check" ${isDone ? 'checked' : ''}
           onclick="event.stopPropagation()"
@@ -134,8 +162,10 @@ function myTaskCardHtml(t) {
         <div class="task-card-meta">
           ${t.department ? `<span class="task-tag">${escHtml(t.department)}</span>` : ''}
           ${t.deadline   ? `<span class="task-deadline-pill ${dClass}">${deadlineLabel(t.deadline)}</span>` : ''}
+          ${t.description ? `<span class="task-tag" style="background:var(--surface2);color:var(--text-muted);">Has details</span>` : ''}
         </div>
       </div>
+      <div class="task-card-arrow">›</div>
     </div>`;
 }
 
@@ -144,18 +174,12 @@ async function toggleMyTask(taskId, checked) {
   const res = await fetch('/api/task-action', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      action: checked ? 'complete' : 'uncomplete',
-      taskId, idToken: currentIdToken,
-    }),
+    body: JSON.stringify({ action: checked ? 'complete' : 'uncomplete', taskId, idToken: currentIdToken }),
   });
-  if (!res.ok) {
-    const d = await res.json();
-    showToast(d.error || 'Failed to update.', 'error');
-  } else {
-    showToast(checked ? 'Marked complete!' : 'Marked incomplete.', 'success');
-    await loadPublicTasks();
-  }
+  const d = await res.json();
+  if (!res.ok) { showToast(d.error || 'Failed to update.', 'error'); return; }
+  showToast(checked ? 'Marked complete!' : 'Marked incomplete.', 'success');
+  await loadPublicTasks();
 }
 
 // ── Render all tasks ──────────────────────────────────────
@@ -164,25 +188,30 @@ function renderAllTasks() {
   const statusOrder = { in_progress: 0, todo: 1, complete: 2 };
   const sorted = [...publicTasks].sort((a, b) => (statusOrder[a.status] ?? 1) - (statusOrder[b.status] ?? 1));
 
-  if (!sorted.length) { el.innerHTML = '<p class="text-muted text-sm">No tasks yet.</p>'; return; }
+  if (!sorted.length) {
+    el.innerHTML = '<p class="text-muted text-sm" style="padding:0.5rem 0;">No tasks yet.</p>';
+    return;
+  }
 
   el.innerHTML = sorted.map(t => {
     const isMine = (t.task_assignments || []).some(a => a.assignee_email === currentUserEmail);
     const dClass = deadlineClass(t.deadline);
+    const statusLabels = { todo: 'To Do', in_progress: 'In Progress', complete: 'Complete' };
     return `
       <div class="task-card ${t.status === 'complete' ? 'task-card-done' : ''} ${dClass} ${isMine ? 'task-card-mine' : ''}"
-           style="cursor:pointer;" onclick="openPubTaskDetail('${t.id}')">
+           onclick="openPubTaskDetail('${t.id}')">
         <div class="task-card-body">
           <div class="task-card-title ${t.status === 'complete' ? 'task-done' : ''}">${escHtml(t.title)}</div>
           <div class="task-card-meta">
             ${t.department ? `<span class="task-tag">${escHtml(t.department)}</span>` : ''}
             ${t.deadline   ? `<span class="task-deadline-pill ${dClass}">${deadlineLabel(t.deadline)}</span>` : ''}
-            <span class="task-tag" style="background:var(--surface2);">${t.status.replace('_',' ')}</span>
+            <span class="task-tag" style="background:var(--surface2);color:var(--text-muted);">${statusLabels[t.status] || t.status}</span>
             ${(t.task_assignments||[]).map(a =>
               `<span class="task-chip ${a.assignee_email===currentUserEmail?'task-chip-me':''}">${escHtml(a.assignee_name||a.assignee_email)}</span>`
             ).join('')}
           </div>
         </div>
+        <div class="task-card-arrow">›</div>
       </div>`;
   }).join('');
 }
@@ -198,21 +227,23 @@ async function openPubTaskDetail(taskId) {
   const meta = [];
   if (t.department) meta.push(`<span class="task-tag">${escHtml(t.department)}</span>`);
   if (t.deadline)   meta.push(`<span class="task-deadline-pill ${deadlineClass(t.deadline)}">${deadlineLabel(t.deadline)}</span>`);
-  meta.push(`<span class="task-tag">${t.status.replace('_',' ')}</span>`);
+  const statusLabels = { todo: 'To Do', in_progress: 'In Progress', complete: 'Complete' };
+  meta.push(`<span class="task-tag" style="background:var(--surface2);color:var(--text-muted);">${statusLabels[t.status] || t.status}</span>`);
   document.getElementById('pubTaskDetailMeta').innerHTML = meta.join('');
   document.getElementById('pubTaskDetailDesc').textContent = t.description || '';
 
   const myAssignment = (t.task_assignments || []).find(a => a.assignee_email === currentUserEmail);
-  const mySection = document.getElementById('pubMyAssignment');
+  const mySection  = document.getElementById('pubMyAssignment');
   const commentBox = document.getElementById('pubCommentBox');
 
   if (myAssignment && currentUserEmail) {
     mySection.classList.remove('hidden');
     const isDone = !!myAssignment.completed_at;
     document.getElementById('pubAssignmentStatus').innerHTML = `
-      <label style="display:flex;align-items:center;gap:0.6rem;cursor:pointer;">
-        <input type="checkbox" ${isDone ? 'checked' : ''} onchange="toggleMyTask('${t.id}', this.checked)" />
-        <span class="text-sm">${isDone ? 'Marked as complete' : 'Mark as complete'}</span>
+      <label style="display:flex;align-items:center;gap:0.6rem;cursor:pointer;font-size:0.9rem;">
+        <input type="checkbox" class="task-pub-check" ${isDone ? 'checked' : ''}
+          onchange="toggleMyTask('${t.id}', this.checked)" />
+        <span>${isDone ? 'Marked as complete' : 'Mark as complete'}</span>
       </label>`;
     commentBox.classList.remove('hidden');
   } else {
@@ -220,6 +251,21 @@ async function openPubTaskDetail(taskId) {
     commentBox.classList.add('hidden');
   }
 
+  // Assignee list
+  const assignments = t.task_assignments || [];
+  document.getElementById('pubTaskAssignees').innerHTML = assignments.length
+    ? assignments.map(a => `
+        <div class="task-detail-assignee">
+          <div class="task-chip-avatar">${(a.assignee_name || a.assignee_email)[0].toUpperCase()}</div>
+          <div style="flex:1;">
+            <div class="text-sm" style="font-weight:600;">${escHtml(a.assignee_name || a.assignee_email)}</div>
+            ${a.assignee_name ? `<div class="text-sm text-muted">${escHtml(a.assignee_email)}</div>` : ''}
+          </div>
+          <span class="task-tag ${a.completed_at ? 'tag-done' : ''}">${a.completed_at ? 'Done' : 'Pending'}</span>
+        </div>`).join('')
+    : '<span class="text-muted text-sm">No one assigned.</span>';
+
+  document.getElementById('pubCommentInput').value = '';
   document.getElementById('pubTaskComments').innerHTML = '<span class="text-muted text-sm">Loading…</span>';
   show('pubTaskDetailModal');
 
@@ -230,7 +276,7 @@ async function openPubTaskDetail(taskId) {
         <div class="task-comment">
           <div class="task-comment-author">${escHtml(c.author_name || c.author_email)}</div>
           <div class="task-comment-body">${escHtml(c.body)}</div>
-          <div class="task-comment-time text-muted text-sm">${new Date(c.created_at).toLocaleString()}</div>
+          <div class="task-comment-time">${new Date(c.created_at).toLocaleString()}</div>
         </div>`).join('')
     : '<span class="text-muted text-sm">No comments yet.</span>';
 }
@@ -242,16 +288,16 @@ async function submitComment() {
   const body  = input.value.trim();
   if (!body || !currentIdToken || !openDetailTaskId) return;
 
+  const btn = input.nextElementSibling;
+  btn.disabled = true;
   const res = await fetch('/api/task-action', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ action: 'comment', taskId: openDetailTaskId, idToken: currentIdToken, commentBody: body }),
   });
-  if (!res.ok) {
-    const d = await res.json();
-    showToast(d.error || 'Failed to post comment.', 'error');
-    return;
-  }
+  btn.disabled = false;
+  const d = await res.json();
+  if (!res.ok) { showToast(d.error || 'Failed to post comment.', 'error'); return; }
   input.value = '';
   showToast('Comment added!', 'success');
   openPubTaskDetail(openDetailTaskId);

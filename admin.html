@@ -306,7 +306,14 @@
         <label>Assign to</label>
         <div id="taskAssignees" class="task-assignee-list"></div>
         <button class="btn btn-sm btn-ghost" id="openAssignPickerBtn" style="margin-top:0.5rem;">+ Add from Contacts</button>
-        <div id="taskAssignPicker" class="hidden contact-picker-body" style="margin-top:0.5rem;max-height:180px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:0.5rem;"></div>
+        <div id="taskAssignPicker" class="hidden" style="margin-top:0.5rem;border:1px solid var(--border);border-radius:8px;overflow:hidden;">
+          <div style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--border);background:var(--surface2);">
+            <input type="text" id="assignPickerSearch" placeholder="Search contacts…"
+              oninput="filterAssignPicker(this.value)"
+              style="width:100%;border:none;background:transparent;font-size:0.875rem;font-family:inherit;outline:none;" />
+          </div>
+          <div id="taskAssignPickerList" style="max-height:180px;overflow-y:auto;padding:0.4rem 0.5rem;"></div>
+        </div>
       </div>
       <div id="taskModalError" class="error-msg hidden"></div>
     </div>

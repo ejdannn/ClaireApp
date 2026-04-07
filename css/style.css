@@ -1512,3 +1512,16 @@ details[open] .contact-card-summary::before { content: '▾'; }
 
 /* ── Text danger ───────────────────────────────────────── */
 .text-danger { color: var(--danger); }
+
+/* ── Task card arrow (clickable hint) ──────────────────── */
+.task-card-arrow {
+  color: var(--text-light);
+  font-size: 1.25rem;
+  line-height: 1;
+  align-self: center;
+  transition: transform 0.15s;
+}
+.task-card:hover .task-card-arrow { transform: translateX(2px); color: var(--primary); }
+
+/* ── Contact picker item hover ─────────────────────────── */
+.contact-picker-item:hover { background: var(--primary-pale); }
