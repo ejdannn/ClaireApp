@@ -1216,7 +1216,60 @@ async function deleteTask(id) {
 }
 
 // ── List create/delete ────────────────────────────────────
+function openListModal() {
+  document.getElementById('listNameInput').value = '';
+  document.getElementById('listModalError').classList.add('hidden');
+  renderListManagerRows();
+  show('newListModal');
+  setTimeout(() => document.getElementById('listNameInput').focus(), 80);
+}
+
 function closeListModal() { hide('newListModal'); }
+
+function renderListManagerRows() {
+  const container = document.getElementById('listManagerRows');
+  if (!container) return;
+  if (!allTaskLists.length) {
+    container.innerHTML = '<p class="text-muted text-sm" style="text-align:center;padding:0.5rem 0;">No lists yet.</p>';
+    return;
+  }
+  container.innerHTML = allTaskLists.map(l => `
+    <div class="list-manager-row" id="list-row-${l.id}">
+      <input class="list-manager-input" id="list-name-${l.id}" value="${escHtml(l.name)}"
+        onkeydown="if(event.key==='Enter'){event.preventDefault();renameList('${l.id}');}if(event.key==='Escape'){this.value=allTaskLists.find(x=>x.id==='${l.id}')?.name||'';}" />
+      <button class="btn btn-secondary btn-sm" onclick="renameList('${l.id}')">Save</button>
+      <button class="btn-icon text-danger" onclick="deleteList('${l.id}')" title="Delete list">✕</button>
+    </div>`).join('');
+}
+
+async function renameList(id) {
+  const input = document.getElementById(`list-name-${id}`);
+  const name  = input?.value.trim();
+  if (!name) { input?.focus(); return; }
+  const original = allTaskLists.find(l => l.id === id)?.name;
+  if (name === original) return;
+
+  const btn = input?.nextElementSibling;
+  if (btn) btn.disabled = true;
+  try {
+    const res = await fetch('/api/task-lists', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, name, adminCode: getAdminCode() }),
+    });
+    if (!res.ok) throw new Error((await res.json()).error || 'Failed.');
+    const updated = allTaskLists.find(l => l.id === id);
+    if (updated) updated.name = name;
+    showToast(`Renamed to "${name}"`, 'success');
+    // Refresh the tasks body so group headers update (no full reload needed)
+    applyTaskFilters();
+  } catch (e) {
+    showToast(e.message, 'error');
+    if (input) input.value = original || '';
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
 
 // ── Inline list creation (inside task modal) ──────────────
 function toggleInlineNewList(forceOpen) {
@@ -1261,11 +1314,11 @@ async function saveInlineList() {
 }
 
 async function saveList() {
-  const name = document.getElementById('listNameInput').value.trim();
-  const desc = document.getElementById('listDescInput').value.trim();
+  const input = document.getElementById('listNameInput');
+  const name  = input.value.trim();
   const errEl = document.getElementById('listModalError');
   errEl.classList.add('hidden');
-  if (!name) { errEl.textContent = 'Name required.'; errEl.classList.remove('hidden'); return; }
+  if (!name) { errEl.textContent = 'Name required.'; errEl.classList.remove('hidden'); input.focus(); return; }
 
   const btn = document.getElementById('confirmListBtn');
   btn.disabled = true;
@@ -1273,32 +1326,38 @@ async function saveList() {
     const res = await fetch('/api/task-lists', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, description: desc || null, adminCode: getAdminCode() }),
+      body: JSON.stringify({ name, adminCode: getAdminCode() }),
     });
     if (!res.ok) throw new Error((await res.json()).error || 'Failed.');
-    closeListModal();
-    document.getElementById('listNameInput').value = '';
-    document.getElementById('listDescInput').value = '';
+    const newList = await res.json();
+    allTaskLists.push(newList);
+    input.value = '';
     showToast(`List "${name}" created!`, 'success');
-    loadTasks();
+    renderListManagerRows();
+    applyTaskFilters();
   } catch (e) {
     errEl.textContent = e.message;
     errEl.classList.remove('hidden');
   } finally {
     btn.disabled = false;
+    input.focus();
   }
 }
 
 async function deleteList(id) {
   const list = allTaskLists.find(l => l.id === id);
   if (!confirm(`Delete list "${list?.name}"? Tasks in it will move to General.`)) return;
-  await fetch('/api/task-lists', {
+  const res = await fetch('/api/task-lists', {
     method: 'DELETE',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ id, adminCode: getAdminCode() }),
   });
+  if (!res.ok) { showToast('Failed to delete list.', 'error'); return; }
+  allTaskLists = allTaskLists.filter(l => l.id !== id);
+  allTasks.forEach(t => { if (t.list_id === id) t.list_id = null; });
   showToast('List deleted.', 'success');
-  loadTasks();
+  renderListManagerRows();
+  applyTaskFilters();
 }
 
 // ── Copy summary for one list ─────────────────────────────
@@ -1424,7 +1483,7 @@ function bindUI() {
     if (!contactGroups.length) ensureContactsLoaded();
     openTaskModal();
   });
-  document.getElementById('newListBtn').addEventListener('click', () => show('newListModal'));
+  document.getElementById('newListBtn').addEventListener('click', () => openListModal());
   document.getElementById('generateSummaryBtn').addEventListener('click', generateTaskSummary);
   document.getElementById('openAssignPickerBtn').addEventListener('click', () => {
     const picker = document.getElementById('taskAssignPicker');
