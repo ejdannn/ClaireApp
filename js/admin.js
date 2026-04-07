@@ -562,9 +562,16 @@ function switchMainView(view) {
 let allTasks = [], allTaskLists = [], editingTaskId = null;
 
 // ── Deadline urgency ──────────────────────────────────────
+// Always parse deadline as local midnight to avoid UTC off-by-one
+function safeDate(d) {
+  if (!d) return null;
+  return new Date(String(d).slice(0, 10) + 'T00:00:00');
+}
+
 function deadlineClass(deadline) {
-  if (!deadline) return '';
-  const days = (new Date(deadline) - new Date()) / 86400000;
+  const dt = safeDate(deadline);
+  if (!dt) return '';
+  const days = (dt - new Date()) / 86400000;
   if (days < 0)  return 'deadline-overdue';
   if (days < 1)  return 'deadline-today';
   if (days < 3)  return 'deadline-soon';
@@ -573,8 +580,9 @@ function deadlineClass(deadline) {
 }
 
 function deadlineLabel(deadline) {
-  if (!deadline) return '';
-  const days = Math.ceil((new Date(deadline) - new Date()) / 86400000);
+  const dt = safeDate(deadline);
+  if (!dt) return '';
+  const days = Math.ceil((dt - new Date()) / 86400000);
   if (days < 0)  return `Overdue by ${Math.abs(days)}d`;
   if (days === 0) return 'Due today';
   if (days === 1) return 'Due tomorrow';
@@ -693,12 +701,12 @@ function applyTaskFilters() {
     if (taskStatusFilter !== 'all' && t.status !== taskStatusFilter) return false;
     if (!q) return true;
     const inTitle    = t.title.toLowerCase().includes(q);
-    const inDept     = (t.department || '').toLowerCase().includes(q);
+    const inList     = (t.todo_lists?.name || '').toLowerCase().includes(q);
     const inAssignee = (t.task_assignments || []).some(a =>
       (a.assignee_name || '').toLowerCase().includes(q) ||
       (a.assignee_email || '').toLowerCase().includes(q)
     );
-    return inTitle || inDept || inAssignee;
+    return inTitle || inList || inAssignee;
   });
 
   hide('tasksEmpty');
@@ -712,6 +720,93 @@ function applyTaskFilters() {
   noResults?.classList.add('hidden');
   renderSharedTasks(filtered);
   show('tasksBody');
+}
+
+// ── Calendar view ─────────────────────────────────────────
+let taskViewMode  = 'list';   // 'list' | 'calendar'
+let calYear  = new Date().getFullYear();
+let calMonth = new Date().getMonth(); // 0-based
+
+function setTaskView(mode) {
+  taskViewMode = mode;
+  document.getElementById('viewListBtn').classList.toggle('active', mode === 'list');
+  document.getElementById('viewCalBtn').classList.toggle('active',  mode === 'calendar');
+  const toolbar = document.getElementById('taskToolbar');
+  if (toolbar) toolbar.classList.toggle('hidden', mode === 'calendar');
+  if (mode === 'list') {
+    hide('tasksCalendarView');
+    applyTaskFilters();
+  } else {
+    hide('tasksBody');
+    hide('tasksNoResults');
+    show('tasksCalendarView');
+    renderCalendar();
+  }
+}
+
+function calShiftMonth(delta) {
+  calMonth += delta;
+  if (calMonth > 11) { calMonth = 0; calYear++; }
+  if (calMonth < 0)  { calMonth = 11; calYear--; }
+  renderCalendar();
+}
+
+function renderCalendar() {
+  const shared = allTasks.filter(t => !t.is_private);
+  const today  = new Date(); today.setHours(0,0,0,0);
+
+  // Bucket tasks by YYYY-MM-DD string
+  const byDay = {};
+  const noDeadline = [];
+  shared.forEach(t => {
+    if (!t.deadline) { noDeadline.push(t); return; }
+    const key = String(t.deadline).slice(0, 10);
+    (byDay[key] = byDay[key] || []).push(t);
+  });
+
+  // Label
+  const label = new Date(calYear, calMonth, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+  document.getElementById('calMonthLabel').textContent = label;
+
+  // Build grid
+  const firstDow = new Date(calYear, calMonth, 1).getDay(); // 0=Sun
+  const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+  const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  let html = DAYS.map(d => `<div class="cal-day-header">${d}</div>`).join('');
+
+  // Empty leading cells
+  for (let i = 0; i < firstDow; i++) html += '<div class="cal-cell cal-cell-empty"></div>';
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const key  = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const dt   = new Date(calYear, calMonth, d);
+    const isToday = dt.getTime() === today.getTime();
+    const tasks = byDay[key] || [];
+
+    const dots = tasks.map(t => {
+      const sc = STATUS_COLORS[t.status] || '';
+      return `<div class="cal-task-dot ${sc} ${deadlineClass(t.deadline)}" onclick="openTaskDetail('${t.id}')" title="${escHtml(t.title)}">${escHtml(t.title)}</div>`;
+    }).join('');
+
+    html += `
+      <div class="cal-cell ${isToday ? 'cal-cell-today' : ''} ${tasks.length ? 'cal-cell-has-tasks' : ''}">
+        <div class="cal-day-num ${isToday ? 'cal-today-badge' : ''}">${d}</div>
+        ${dots}
+      </div>`;
+  }
+
+  document.getElementById('calGrid').innerHTML = html;
+
+  // No-deadline list
+  const ndEl   = document.getElementById('calNoDeadline');
+  const ndList = document.getElementById('calNoDeadlineList');
+  if (noDeadline.length) {
+    ndList.innerHTML = noDeadline.map(t => taskCardHtml(t)).join('');
+    ndEl.classList.remove('hidden');
+  } else {
+    ndEl.classList.add('hidden');
+  }
 }
 
 function renderSharedTasks(tasks) {
@@ -794,7 +889,6 @@ function taskCardHtml(t) {
       <div class="task-card-body">
         <div class="task-card-title ${t.status === 'complete' ? 'task-done' : ''}">${escHtml(t.title)}</div>
         <div class="task-card-meta">
-          ${t.department ? `<span class="task-tag">${escHtml(t.department)}</span>` : ''}
           ${t.deadline   ? `<span class="task-deadline-pill ${dClass}">${deadlineLabel(t.deadline)}</span>` : ''}
           ${assignments.length ? assignments.map(a =>
             `<span class="task-chip">${escHtml(a.assignee_name || a.assignee_email)}</span>`).join('') : ''}
@@ -832,9 +926,8 @@ async function openTaskDetail(taskId) {
 
   // Meta pills (no status — it's shown above)
   const meta = [];
-  if (t.department) meta.push(`<span class="task-tag">${escHtml(t.department)}</span>`);
   if (t.deadline) {
-    const fullDate = new Date(t.deadline + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+    const fullDate = safeDate(t.deadline).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
     meta.push(`<span class="task-deadline-pill ${deadlineClass(t.deadline)}" title="${fullDate}">Due ${fullDate}</span>`);
   }
   if (t.todo_lists?.name) meta.push(`<span class="task-tag">List: ${escHtml(t.todo_lists.name)}</span>`);
@@ -918,7 +1011,6 @@ function openTaskModal(task = null) {
   document.getElementById('taskTitleInput').value = task?.title || '';
   document.getElementById('taskDescInput').value  = task?.description || '';
   document.getElementById('taskDeadlineInput').value = task?.deadline ? task.deadline.slice(0,10) : '';
-  document.getElementById('taskDeptInput').value  = task?.department || '';
   document.getElementById('taskModalError').classList.add('hidden');
 
   // Populate list select
@@ -1022,7 +1114,6 @@ async function saveTask() {
   const title    = document.getElementById('taskTitleInput').value.trim();
   const desc     = document.getElementById('taskDescInput').value.trim();
   const deadline = document.getElementById('taskDeadlineInput').value;
-  const dept     = document.getElementById('taskDeptInput').value.trim();
   const listId   = document.getElementById('taskListSelect').value;
   const errEl    = document.getElementById('taskModalError');
 
@@ -1036,7 +1127,6 @@ async function saveTask() {
     const body = {
       title, description: desc || null,
       deadline: deadline || null,
-      department: dept || null,
       list_id: listId || null,
       assignments: taskAssigneeList,
       adminCode: getAdminCode(),
@@ -1118,14 +1208,11 @@ async function deleteList(id) {
 // ── Shared task line formatter ────────────────────────────
 function formatTaskLine(t) {
   const inProgress = t.status === 'in_progress';
-  const deadline   = t.deadline
-    ? ` - Due ${new Date(t.deadline + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`
-    : '';
+  const dueFmt     = t.deadline ? safeDate(t.deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : null;
   const assignees  = (t.task_assignments || []).map(a => a.assignee_name || a.assignee_email).join(', ');
-  const suffix     = [inProgress ? 'In Progress' : '', assignees, deadline ? deadline.slice(3) : '']
-    .filter(Boolean);
+  const parts      = [inProgress ? 'In Progress' : null, assignees || null, dueFmt ? `Due ${dueFmt}` : null].filter(Boolean);
   // WhatsApp bold via asterisks; plain bullet for iMessage
-  return `• ${inProgress ? '*' : ''}${t.title}${inProgress ? '*' : ''}${suffix.length ? ' (' + [inProgress ? 'In Progress' : null, assignees || null, t.deadline ? 'Due ' + new Date(t.deadline + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : null].filter(Boolean).join(', ') + ')' : ''}`;
+  return `• ${inProgress ? '*' : ''}${t.title}${inProgress ? '*' : ''}${parts.length ? ' (' + parts.join(', ') + ')' : ''}`;
 }
 
 function copyListSummary(listId) {

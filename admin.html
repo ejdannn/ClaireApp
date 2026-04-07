@@ -249,8 +249,13 @@
 
       <!-- Shared tasks header -->
       <div class="groups-header" style="margin-top:1rem;">
-        <div>
+        <div style="display:flex;align-items:center;gap:0.75rem;">
           <h2>Shared Tasks</h2>
+          <!-- List / Calendar toggle -->
+          <div class="task-view-toggle">
+            <button class="task-view-btn active" id="viewListBtn" onclick="setTaskView('list')" title="List view">&#9776; List</button>
+            <button class="task-view-btn"        id="viewCalBtn"  onclick="setTaskView('calendar')" title="Calendar view">&#9635; Calendar</button>
+          </div>
         </div>
         <div style="display:flex;gap:0.5rem;">
           <button class="btn btn-secondary btn-sm" id="generateSummaryBtn">Copy All Summary</button>
@@ -259,9 +264,9 @@
         </div>
       </div>
 
-      <!-- Search + filter bar -->
-      <div class="task-toolbar">
-        <input type="text" id="taskSearchInput" placeholder="Search tasks, people, departments…"
+      <!-- Search + filter bar (list view only) -->
+      <div class="task-toolbar" id="taskToolbar">
+        <input type="text" id="taskSearchInput" placeholder="Search tasks, people, lists…"
           oninput="applyTaskFilters()" class="task-search-input" />
         <div class="filter-chips" id="taskFilterChips">
           <button class="filter-chip active" data-status="all"         onclick="setTaskStatusFilter(this)">All</button>
@@ -276,8 +281,23 @@
         <span>Loading tasks…</span>
       </div>
 
+      <!-- List view -->
       <div id="tasksBody" class="hidden"></div>
       <div id="tasksNoResults" class="hidden" style="text-align:center;padding:2rem;color:var(--text-muted);">No tasks match your search.</div>
+
+      <!-- Calendar view -->
+      <div id="tasksCalendarView" class="hidden">
+        <div class="cal-nav">
+          <button class="btn btn-ghost btn-sm" onclick="calShiftMonth(-1)">&#8249;</button>
+          <span class="cal-month-label" id="calMonthLabel"></span>
+          <button class="btn btn-ghost btn-sm" onclick="calShiftMonth(1)">&#8250;</button>
+        </div>
+        <div class="cal-grid" id="calGrid"></div>
+        <div id="calNoDeadline" class="hidden" style="margin-top:1.25rem;">
+          <div class="task-group-name" style="margin-bottom:0.5rem;color:var(--text-muted);font-size:0.8rem;text-transform:uppercase;letter-spacing:.05em;">No deadline</div>
+          <div id="calNoDeadlineList"></div>
+        </div>
+      </div>
 
       <div id="tasksEmpty" class="empty-state hidden">
         <div class="empty-icon" style="font-size:2rem;font-weight:700;color:var(--primary);">✓</div>
@@ -307,20 +327,14 @@
         <label for="taskDescInput">Description <span class="text-muted text-sm">(optional)</span></label>
         <textarea id="taskDescInput" placeholder="Any extra details, links, or context…" rows="3"></textarea>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;">
-        <div class="form-group">
-          <label for="taskDeadlineInput">Deadline</label>
-          <input type="date" id="taskDeadlineInput" />
-        </div>
-        <div class="form-group">
-          <label for="taskDeptInput">Department</label>
-          <input type="text" id="taskDeptInput" placeholder="e.g. Marketing, Tech…" />
-        </div>
+      <div class="form-group">
+        <label for="taskDeadlineInput">Deadline</label>
+        <input type="date" id="taskDeadlineInput" />
       </div>
       <div class="form-group">
-        <label for="taskListSelect">Sub-list</label>
+        <label for="taskListSelect">List</label>
         <select id="taskListSelect">
-          <option value="">No list</option>
+          <option value="">— No list —</option>
         </select>
       </div>
       <div class="form-group">
@@ -349,7 +363,7 @@
 <div id="newListModal" class="modal-backdrop hidden">
   <div class="modal" style="max-width:400px;">
     <div class="modal-header">
-      <h3>New Sub-list</h3>
+      <h3>New List</h3>
       <button class="btn-icon" onclick="closeListModal()">✕</button>
     </div>
     <div class="modal-body">
