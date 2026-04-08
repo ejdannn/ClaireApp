@@ -1852,7 +1852,7 @@ function bindUI() {
 
     // Escape → close any open modal
     if (e.key === 'Escape') {
-      const modals = ['taskDetailModal', 'newTaskModal', 'newListModal', 'pubTaskDetailModal'];
+      const modals = ['taskDetailModal', 'newTaskModal', 'newListModal', 'pubTaskDetailModal', 'docxImportModal'];
       for (const id of modals) {
         const el = document.getElementById(id);
         if (el && !el.classList.contains('hidden')) {
@@ -3086,3 +3086,227 @@ function syncContactsToExpected() {
 }
 
 // show/hide/escHtml defined in utils.js
+
+// ── Docx Import ───────────────────────────────────────────
+let importParsedTasks = [];
+
+async function onDocxFileSelected(input) {
+  const file = input.files[0];
+  input.value = ''; // reset so same file can be re-selected
+  if (!file) return;
+
+  let zip;
+  try {
+    zip = await JSZip.loadAsync(file);
+  } catch {
+    showToast('Could not read file. Make sure it is a .docx.', 'error');
+    return;
+  }
+
+  const xmlFile = zip.file('word/document.xml');
+  if (!xmlFile) {
+    showToast('Invalid .docx — no document.xml found.', 'error');
+    return;
+  }
+
+  const xmlText = await xmlFile.async('text');
+  importParsedTasks = parseDocxTasks(xmlText);
+
+  if (!importParsedTasks.length) {
+    showToast('No tasks found in this document.', 'error');
+    return;
+  }
+
+  openDocxImportModal();
+}
+
+function parseDocxTasks(xmlText) {
+  const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+  const doc = new DOMParser().parseFromString(xmlText, 'application/xml');
+  const paras = Array.from(doc.getElementsByTagNameNS(W, 'p'));
+
+  const tasks = [];
+  let currentSection = '';
+
+  for (const p of paras) {
+    // Check list level
+    const numPr = p.querySelector
+      ? null // fallback below
+      : null;
+    const pPr = p.getElementsByTagNameNS(W, 'pPr')[0];
+    const numPrEl = pPr ? pPr.getElementsByTagNameNS(W, 'numPr')[0] : null;
+    const isList = !!numPrEl;
+    const ilvlEl = numPrEl ? numPrEl.getElementsByTagNameNS(W, 'ilvl')[0] : null;
+    const ilvl = ilvlEl ? parseInt(ilvlEl.getAttributeNS(W, 'val') || '0', 10) : 0;
+
+    // Extract full text
+    const allT = Array.from(p.getElementsByTagNameNS(W, 't'));
+    const fullText = allT.map(t => t.textContent).join('').trim();
+    if (!fullText) continue;
+
+    if (!isList) {
+      // Section header (e.g. "Producers:", "Post Production:")
+      currentSection = fullText.replace(/:$/, '').trim();
+      continue;
+    }
+
+    if (ilvl >= 1) {
+      // Sub-note — attach to last task
+      if (tasks.length) {
+        tasks[tasks.length - 1].notes.push(fullText);
+      }
+      continue;
+    }
+
+    // Level 0 list item — may have a hyperlink assignee
+    const hyperlinks = Array.from(p.getElementsByTagNameNS(W, 'hyperlink'));
+    let assignee = '';
+    let taskTitle = fullText;
+
+    if (hyperlinks.length) {
+      const linkText = Array.from(hyperlinks[0].getElementsByTagNameNS(W, 't'))
+        .map(t => t.textContent).join('').trim();
+      assignee = linkText;
+      // Task title is everything after the hyperlink text
+      taskTitle = fullText.startsWith(assignee)
+        ? fullText.slice(assignee.length).trim()
+        : fullText;
+    }
+
+    if (!taskTitle) continue;
+
+    tasks.push({
+      section: currentSection,
+      assignee,
+      title: taskTitle,
+      notes: [],
+      selected: true,
+    });
+  }
+
+  return tasks;
+}
+
+function openDocxImportModal() {
+  // Populate folder dropdown
+  const sel = document.getElementById('importFolderSelect');
+  sel.innerHTML = '<option value="">No folder</option>';
+  (allTaskLists || []).forEach(l => {
+    const opt = document.createElement('option');
+    opt.value = l.id;
+    opt.textContent = l.name;
+    sel.appendChild(opt);
+  });
+
+  renderImportPreview();
+  show('docxImportModal');
+}
+
+function renderImportPreview() {
+  const list = document.getElementById('importPreviewList');
+  const count = importParsedTasks.filter(t => t.selected).length;
+  document.getElementById('importTaskCount').textContent =
+    `${count} of ${importParsedTasks.length} tasks selected`;
+
+  if (!importParsedTasks.length) {
+    list.innerHTML = '<p class="text-muted text-sm">No tasks found.</p>';
+    return;
+  }
+
+  let html = '';
+  let lastSection = null;
+
+  importParsedTasks.forEach((t, i) => {
+    if (t.section !== lastSection) {
+      lastSection = t.section;
+      if (t.section) {
+        html += `<div class="import-section-label">${escHtml(t.section)}</div>`;
+      }
+    }
+    const notesHtml = t.notes.length
+      ? `<div class="import-task-notes">${t.notes.map(n => `• ${escHtml(n)}`).join('<br>')}</div>`
+      : '';
+    html += `
+      <label class="import-task-row ${t.selected ? '' : 'import-task-deselected'}">
+        <input type="checkbox" ${t.selected ? 'checked' : ''}
+          onchange="importParsedTasks[${i}].selected=this.checked; renderImportPreview()" />
+        <div class="import-task-info">
+          <div class="import-task-title">${escHtml(t.title)}</div>
+          ${t.assignee ? `<div class="import-task-assignee">${escHtml(t.assignee)}</div>` : ''}
+          ${notesHtml}
+        </div>
+      </label>`;
+  });
+
+  list.innerHTML = html;
+}
+
+function importSelectAll(checked) {
+  importParsedTasks.forEach(t => t.selected = checked);
+  renderImportPreview();
+}
+
+function closeDocxImport() {
+  hide('docxImportModal');
+  importParsedTasks = [];
+}
+
+async function confirmDocxImport() {
+  const selected = importParsedTasks.filter(t => t.selected);
+  if (!selected.length) {
+    document.getElementById('importError').textContent = 'Select at least one task.';
+    show('importError');
+    return;
+  }
+  hide('importError');
+
+  const listId = document.getElementById('importFolderSelect').value || null;
+  const btn = document.getElementById('confirmImportBtn');
+  btn.disabled = true;
+  btn.textContent = 'Importing…';
+
+  let failed = 0;
+  for (const t of selected) {
+    // Build description from sub-notes
+    const description = t.notes.length ? t.notes.join('\n') : null;
+
+    // Try to resolve assignee email from loaded tasks/contacts
+    const assignments = [];
+    if (t.assignee) {
+      // Check if we can match against existing assignees
+      const match = (allTasks || [])
+        .flatMap(task => task.task_assignments || [])
+        .find(a => (a.assignee_name || '').toLowerCase() === t.assignee.toLowerCase());
+      if (match) {
+        assignments.push({ email: match.assignee_email, name: match.assignee_name });
+      } else {
+        // Store name only — no email available without a contact lookup
+        assignments.push({ email: `${t.assignee.toLowerCase().replace(/\s+/g, '.')}@unknown`, name: t.assignee });
+      }
+    }
+
+    const res = await fetch('/api/tasks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        adminCode: getAdminCode(),
+        title: t.title,
+        description,
+        list_id: listId,
+        assignments,
+      }),
+    });
+    if (!res.ok) failed++;
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Import Tasks';
+  closeDocxImport();
+  await loadTasks();
+
+  if (failed) {
+    showToast(`Imported ${selected.length - failed} tasks (${failed} failed).`, 'error');
+  } else {
+    showToast(`Imported ${selected.length} task${selected.length > 1 ? 's' : ''} successfully.`, 'success');
+  }
+}

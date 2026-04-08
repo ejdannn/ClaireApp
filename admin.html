@@ -262,6 +262,8 @@
           <button class="btn btn-danger-ghost btn-sm" id="clearAllDoneBtn" onclick="clearCompletedTasks(null)" title="Delete all completed tasks across every folder">Clear all done</button>
           <button class="btn btn-secondary btn-sm" id="generateSummaryBtn">Copy All Summary</button>
           <button class="btn btn-secondary btn-sm" id="newListBtn">+ New Folder</button>
+          <button class="btn btn-secondary btn-sm" onclick="document.getElementById('docxImportInput').click()">⬆ Import .docx</button>
+          <input type="file" id="docxImportInput" accept=".docx" style="display:none;" onchange="onDocxFileSelected(this)" />
           <button class="btn btn-primary" id="newTaskBtn">+ New Task</button>
         </div>
       </div>
@@ -467,6 +469,38 @@
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeListModal()">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Docx Import Modal ── -->
+<div id="docxImportModal" class="modal-backdrop hidden">
+  <div class="modal" style="max-width:640px;max-height:90vh;display:flex;flex-direction:column;">
+    <div class="modal-header">
+      <h3 style="flex:1;">Import Tasks from Document</h3>
+      <button class="btn-icon" onclick="closeDocxImport()">✕</button>
+    </div>
+    <div class="modal-body" style="flex:1;overflow-y:auto;padding-bottom:0;">
+      <!-- Folder selector -->
+      <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1rem;flex-wrap:wrap;">
+        <label style="font-size:0.85rem;font-weight:600;white-space:nowrap;">Add to folder:</label>
+        <select id="importFolderSelect" style="flex:1;min-width:150px;padding:0.35rem 0.6rem;border-radius:8px;border:1.5px solid var(--border);font-family:inherit;font-size:0.85rem;">
+          <option value="">No folder</option>
+        </select>
+        <span id="importTaskCount" style="font-size:0.82rem;color:var(--text-muted);white-space:nowrap;"></span>
+      </div>
+      <!-- Select / deselect all -->
+      <div style="display:flex;gap:0.5rem;margin-bottom:0.75rem;">
+        <button class="btn btn-ghost btn-sm" onclick="importSelectAll(true)">Select all</button>
+        <button class="btn btn-ghost btn-sm" onclick="importSelectAll(false)">Deselect all</button>
+      </div>
+      <!-- Task preview list -->
+      <div id="importPreviewList" style="display:flex;flex-direction:column;gap:0.4rem;"></div>
+    </div>
+    <div class="modal-footer" style="flex-shrink:0;">
+      <div id="importError" class="error-msg hidden" style="flex:1;margin:0;"></div>
+      <button class="btn btn-ghost" onclick="closeDocxImport()">Cancel</button>
+      <button class="btn btn-primary" id="confirmImportBtn" onclick="confirmDocxImport()">Import Tasks</button>
     </div>
   </div>
 </div>
@@ -781,6 +815,8 @@ bob@example.com" style="width:100%;font-size:0.82rem;font-family:monospace;borde
 
 <!-- Supabase CDN -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<!-- JSZip for .docx import -->
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="/js/config.js"></script>
 <script src="/js/utils.js"></script>
 <script src="/js/admin.js"></script>
