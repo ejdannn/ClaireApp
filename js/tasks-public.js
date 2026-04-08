@@ -5,6 +5,28 @@
 let currentUserEmail = null, currentUserName = null, currentIdToken = null;
 let publicTasks = [], openDetailTaskId = null;
 
+// ── Comment notification tracking ────────────────────────
+function getSeenComments() {
+  try { return JSON.parse(localStorage.getItem('claire_seen_comments') || '{}'); } catch { return {}; }
+}
+function markTaskSeen(taskId) {
+  const seen = getSeenComments();
+  seen[taskId] = Date.now();
+  try { localStorage.setItem('claire_seen_comments', JSON.stringify(seen)); } catch {}
+}
+function hasNewComments(t) {
+  const comments = t.task_comments;
+  if (!comments || !comments.length) return false;
+  const seen = getSeenComments();
+  const lastSeen = seen[t.id];
+  if (!lastSeen) return true;
+  return comments.some(c => new Date(c.created_at).getTime() > lastSeen);
+}
+function commentBadgeHtml(t) {
+  if (!hasNewComments(t)) return '';
+  return `<span class="task-comment-badge" title="New comments">💬</span>`;
+}
+
 // ── Init ──────────────────────────────────────────────────
 window.addEventListener('load', () => {
   const clientId = window.CLAIRE_CONFIG?.googleClientId;
@@ -181,7 +203,7 @@ function myTaskCardHtml(t) {
     <div class="task-pub-card ${s === 'complete' ? 'task-card-done' : ''} ${dClass} task-card-mine"
          onclick="openPubTaskDetail('${t.id}')">
       <div style="flex:1;min-width:0;">
-        <div class="task-card-title ${s === 'complete' ? 'task-done' : ''}">${escHtml(t.title)}</div>
+        <div class="task-card-title ${s === 'complete' ? 'task-done' : ''}">${escHtml(t.title)}${commentBadgeHtml(t)}</div>
         <div class="task-card-meta" style="margin-top:0.25rem;">
           ${t.department ? `<span class="task-tag">${escHtml(t.department)}</span>` : ''}
           ${t.deadline   ? `<span class="task-deadline-pill ${dClass}">${deadlineLabel(t.deadline)}</span>` : ''}
@@ -235,7 +257,7 @@ function renderAllTasks() {
       <div class="task-pub-card ${t.status === 'complete' ? 'task-card-done' : ''} ${dClass} ${isMine ? 'task-card-mine' : ''}"
            onclick="openPubTaskDetail('${t.id}')">
         <div style="flex:1;min-width:0;">
-          <div class="task-card-title ${t.status === 'complete' ? 'task-done' : ''}">${escHtml(t.title)}</div>
+          <div class="task-card-title ${t.status === 'complete' ? 'task-done' : ''}">${escHtml(t.title)}${commentBadgeHtml(t)}</div>
           <div class="task-card-meta" style="margin-top:0.25rem;">
             ${t.department ? `<span class="task-tag">${escHtml(t.department)}</span>` : ''}
             ${t.deadline   ? `<span class="task-deadline-pill ${dClass}">${deadlineLabel(t.deadline)}</span>` : ''}
@@ -255,6 +277,7 @@ async function openPubTaskDetail(taskId) {
   openDetailTaskId = taskId;
   const t = publicTasks.find(t => t.id === taskId);
   if (!t) return;
+  markTaskSeen(taskId);
 
   document.getElementById('pubTaskDetailTitle').textContent = t.title;
 

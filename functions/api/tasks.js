@@ -27,7 +27,7 @@ export async function onRequestGet(context) {
   const filter = isAdmin ? '' : '&is_private=eq.false';
 
   const res = await fetch(
-    `${env.SUPABASE_URL}/rest/v1/tasks?select=*,task_assignments(*),todo_lists(id,name)&order=sort_order.asc,created_at.asc${filter}`,
+    `${env.SUPABASE_URL}/rest/v1/tasks?select=*,task_assignments(*),todo_lists(id,name),task_comments(id,created_at)&order=sort_order.asc,created_at.asc${filter}`,
     {
       headers: {
         'apikey': env.SUPABASE_SERVICE_ROLE_KEY,

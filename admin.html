@@ -256,7 +256,6 @@
             <button class="task-view-btn active" id="viewListBtn"     onclick="setTaskView('list')"     title="List view">&#9776; List</button>
             <button class="task-view-btn"        id="viewCalBtn"      onclick="setTaskView('calendar')" title="Calendar view">&#9635; Calendar</button>
             <button class="task-view-btn"        id="viewKanbanBtn"   onclick="setTaskView('kanban')"   title="Kanban board">&#8999; Kanban</button>
-            <button class="task-view-btn"        id="viewTimelineBtn" onclick="setTaskView('timeline')" title="Timeline">&#8596; Timeline</button>
           </div>
         </div>
         <div style="display:flex;gap:0.5rem;align-items:center;">
@@ -287,13 +286,19 @@
           Flat view
         </label>
         <div class="density-toggle" id="densityToggle">
-          <button class="density-btn" data-density="compact"      onclick="setDensity('compact')"      title="Compact">&#9636;</button>
-          <button class="density-btn active" data-density="comfortable" onclick="setDensity('comfortable')" title="Comfortable">&#9638;</button>
-          <button class="density-btn" data-density="detailed"     onclick="setDensity('detailed')"     title="Detailed">&#9639;</button>
+          <button class="density-btn" data-density="compact"      onclick="setDensity('compact')">Compact</button>
+          <button class="density-btn active" data-density="comfortable" onclick="setDensity('comfortable')">Comfortable</button>
+          <button class="density-btn" data-density="detailed"     onclick="setDensity('detailed')">Detailed</button>
         </div>
-        <select id="focusSelect" class="sort-select" onchange="setFocusAssignee(this.value)" title="Focus on one person">
-          <option value="">&#128100; All people</option>
-        </select>
+        <div class="focus-picker-wrap" id="focusPickerWrap">
+          <input type="text" id="focusSearchInput" class="task-search-input focus-search-input"
+            placeholder="Focus: all people…" autocomplete="off"
+            oninput="onFocusSearch(this.value)"
+            onfocus="showFocusDropdown()"
+            onkeydown="if(event.key==='Escape'){clearFocus();this.blur();}" />
+          <button class="focus-clear-btn hidden" id="focusClearBtn" onclick="clearFocus()" title="Clear focus">✕</button>
+          <div class="focus-dropdown hidden" id="focusDropdown"></div>
+        </div>
       </div>
 
       <!-- Overdue banner -->
@@ -367,20 +372,6 @@
       </div>
 
       <!-- Timeline view -->
-      <div id="tasksTimelineView" class="hidden">
-        <div class="cal-nav" style="margin-bottom:0.5rem;">
-          <button class="btn btn-ghost btn-sm" onclick="timelineShift(-30)">&#8249;</button>
-          <span id="timelineLabel" class="cal-month-label"></span>
-          <button class="btn btn-ghost btn-sm" onclick="timelineShift(30)">&#8250;</button>
-        </div>
-        <div class="timeline-wrap">
-          <div class="timeline-rows" id="timelineRows"></div>
-        </div>
-        <div id="timelineNoDate" class="hidden" style="margin-top:1.25rem;">
-          <div class="task-group-name" style="margin-bottom:0.5rem;color:var(--text-muted);font-size:0.8rem;text-transform:uppercase;letter-spacing:.05em;">No due date</div>
-          <div id="timelineNoDateList"></div>
-        </div>
-      </div>
 
       <div id="tasksEmpty" class="empty-state hidden">
         <div class="empty-icon" style="font-size:2rem;font-weight:700;color:var(--primary);">✓</div>
