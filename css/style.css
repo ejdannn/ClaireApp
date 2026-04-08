@@ -2102,23 +2102,15 @@ details[open] .contact-card-summary::before { content: '▾'; }
 
 /* ── Comment notification badge ──────────────────────────── */
 .task-comment-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 1.1rem;
-  height: 1.1rem;
-  border-radius: 99px;
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
   background: var(--primary);
-  color: #fff;
-  font-size: 0.65rem;
-  font-weight: 700;
-  padding: 0 0.25rem;
-  margin-left: 0.3rem;
+  margin-left: 0.4rem;
   vertical-align: middle;
   flex-shrink: 0;
-}
-.kanban-card .task-comment-badge {
-  margin-left: 0;
-  font-size: 0.6rem;
+  position: relative;
+  top: -1px;
 }
 

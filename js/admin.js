@@ -717,7 +717,7 @@ function hasNewComments(t) {
 }
 function commentBadgeHtml(t) {
   if (!hasNewComments(t)) return '';
-  return `<span class="task-comment-badge" title="New comments">💬</span>`;
+  return `<span class="task-comment-badge" title="New comments"></span>`;
 }
 
 function setTaskStatusFilter(btn) {
@@ -997,7 +997,7 @@ function kanbanCardHtml(t) {
   ).join('');
   const moreAv    = assignments.length > 3 ? `<span style="font-size:0.7rem;color:var(--text-muted);">+${assignments.length - 3}</span>` : '';
 
-  return `<div class="kanban-card ${dClass}" draggable="true"
+  return `<div class="kanban-card ${dClass}" draggable="true" data-task-id="${t.id}"
     ondragstart="kanbanDragId='${t.id}';event.dataTransfer.effectAllowed='move';"
     ondragend="document.querySelectorAll('.kanban-col').forEach(c=>c.classList.remove('kanban-drag-over'))"
     onclick="openTaskDetail('${t.id}')">
@@ -1205,16 +1205,36 @@ const STATUS_COLORS = { todo: '', in_progress: 'status-inprogress', complete: 's
 function taskCardHtml(t, showListTag = false) {
   const assignments = t.task_assignments || [];
   const dClass      = deadlineClass(t.deadline);
-  const listName    = showListTag && t.list_id
+  const isDetailed  = taskDensity === 'detailed';
+  const listName    = (showListTag || isDetailed) && t.list_id
     ? (allTaskLists.find(l => l.id === t.list_id)?.name || null)
     : null;
 
   const descPreview = t.description
-    ? `<div class="task-card-desc">${escHtml(t.description.slice(0, 120))}${t.description.length > 120 ? '\u2026' : ''}</div>`
+    ? `<div class="task-card-desc">${escHtml(t.description.slice(0, 180))}${t.description.length > 180 ? '\u2026' : ''}</div>`
+    : '';
+
+  // In detailed mode show full date; in comfortable just relative label
+  const deadlinePill = t.deadline
+    ? (() => {
+        const fullDate = isDetailed
+          ? safeDate(t.deadline).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
+          : deadlineLabel(t.deadline);
+        return `<span class="task-deadline-pill ${dClass} deadline-pill-always">${fullDate}</span>`;
+      })()
+    : '';
+
+  const assigneeHtml = assignments.length
+    ? assignments.map(a => {
+        const label = isDetailed && a.assignee_email
+          ? `${escHtml(a.assignee_name || '')}${a.assignee_name ? ' · ' : ''}<span style="font-size:0.72em;opacity:0.75;">${escHtml(a.assignee_email)}</span>`
+          : escHtml(a.assignee_name || a.assignee_email);
+        return `<span class="task-chip">${label}</span>`;
+      }).join('')
     : '';
 
   return `
-    <div class="task-card ${t.status === 'complete' ? 'task-card-done' : ''} ${dClass}"
+    <div class="task-card ${t.status === 'complete' ? 'task-card-done' : ''} ${dClass}" data-task-id="${t.id}"
          onclick="openTaskDetail('${t.id}')">
       <div class="task-card-left" onclick="event.stopPropagation()">
         <select class="task-status-dropdown ${STATUS_COLORS[t.status] || ''}"
@@ -1230,9 +1250,8 @@ function taskCardHtml(t, showListTag = false) {
         ${descPreview}
         <div class="task-card-meta">
           ${listName    ? `<span class="task-tag task-list-tag">${escHtml(listName)}</span>` : ''}
-          ${t.deadline  ? `<span class="task-deadline-pill ${dClass} deadline-pill-always">${deadlineLabel(t.deadline)}</span>` : ''}
-          ${assignments.length ? assignments.map(a =>
-            `<span class="task-chip">${escHtml(a.assignee_name || a.assignee_email)}</span>`).join('') : ''}
+          ${deadlinePill}
+          ${assigneeHtml}
         </div>
       </div>
     </div>`;
@@ -1255,6 +1274,8 @@ async function openTaskDetail(taskId) {
   if (!t) return;
   detailTaskId = taskId;
   markTaskSeen(taskId);
+  // Remove notification badges from all cards for this task (list + kanban)
+  document.querySelectorAll(`[data-task-id="${taskId}"] .task-comment-badge`).forEach(el => el.remove());
 
   document.getElementById('taskDetailTitle').textContent = t.title;
 

@@ -24,7 +24,7 @@ function hasNewComments(t) {
 }
 function commentBadgeHtml(t) {
   if (!hasNewComments(t)) return '';
-  return `<span class="task-comment-badge" title="New comments">💬</span>`;
+  return `<span class="task-comment-badge" title="New comments"></span>`;
 }
 
 // ── Init ──────────────────────────────────────────────────
@@ -200,7 +200,7 @@ function myTaskCardHtml(t) {
   const dClass = deadlineClass(t.deadline);
   const s = t.status;
   return `
-    <div class="task-pub-card ${s === 'complete' ? 'task-card-done' : ''} ${dClass} task-card-mine"
+    <div class="task-pub-card ${s === 'complete' ? 'task-card-done' : ''} ${dClass} task-card-mine" data-task-id="${t.id}"
          onclick="openPubTaskDetail('${t.id}')">
       <div style="flex:1;min-width:0;">
         <div class="task-card-title ${s === 'complete' ? 'task-done' : ''}">${escHtml(t.title)}${commentBadgeHtml(t)}</div>
@@ -254,7 +254,7 @@ function renderAllTasks() {
     const isMine = (t.task_assignments || []).some(a => a.assignee_email === currentUserEmail);
     const dClass = deadlineClass(t.deadline);
     return `
-      <div class="task-pub-card ${t.status === 'complete' ? 'task-card-done' : ''} ${dClass} ${isMine ? 'task-card-mine' : ''}"
+      <div class="task-pub-card ${t.status === 'complete' ? 'task-card-done' : ''} ${dClass} ${isMine ? 'task-card-mine' : ''}" data-task-id="${t.id}"
            onclick="openPubTaskDetail('${t.id}')">
         <div style="flex:1;min-width:0;">
           <div class="task-card-title ${t.status === 'complete' ? 'task-done' : ''}">${escHtml(t.title)}${commentBadgeHtml(t)}</div>
@@ -278,6 +278,7 @@ async function openPubTaskDetail(taskId) {
   const t = publicTasks.find(t => t.id === taskId);
   if (!t) return;
   markTaskSeen(taskId);
+  document.querySelectorAll(`[data-task-id="${taskId}"] .task-comment-badge`).forEach(el => el.remove());
 
   document.getElementById('pubTaskDetailTitle').textContent = t.title;
 
