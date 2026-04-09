@@ -19,14 +19,10 @@ export async function onRequestOptions() {
 
 export async function onRequestGet(context) {
   const { request, env } = context;
-  const url = new URL(request.url);
-  const adminCode = url.searchParams.get('adminCode');
-  if (adminCode !== env.ADMIN_CODE) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: CORS });
-  }
+  // Folder list is public (names are not sensitive)
 
   const res = await fetch(
-    `${env.SUPABASE_URL}/rest/v1/todo_lists?order=created_at.asc`,
+    `${env.SUPABASE_URL}/rest/v1/todo_lists?select=id,name,default_assignees&order=created_at.asc`,
     {
       headers: {
         'apikey': env.SUPABASE_SERVICE_ROLE_KEY,
@@ -74,7 +70,7 @@ export async function onRequestPut(context) {
     return new Response(JSON.stringify({ error: 'Invalid body' }), { status: 400, headers: CORS });
   }
 
-  const { adminCode, id, name, description } = body;
+  const { adminCode, id, name, description, default_assignees } = body;
   if (adminCode !== env.ADMIN_CODE) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: CORS });
   }
@@ -83,6 +79,7 @@ export async function onRequestPut(context) {
   const patch = {};
   if (name !== undefined) patch.name = name.trim();
   if (description !== undefined) patch.description = description?.trim() || null;
+  if (default_assignees !== undefined) patch.default_assignees = default_assignees;
 
   const res = await fetch(`${env.SUPABASE_URL}/rest/v1/todo_lists?id=eq.${id}`, {
     method: 'PATCH',

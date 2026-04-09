@@ -47,7 +47,7 @@ export async function onRequestPost(context) {
     return new Response(JSON.stringify({ error: 'Invalid body' }), { status: 400, headers: CORS });
   }
 
-  const { adminCode, title, description, deadline, department, list_id, is_private, assignments } = body;
+  const { adminCode, title, description, deadline, deadline_time, deadline_tz, department, list_id, is_private, assignments } = body;
 
   if (adminCode !== env.ADMIN_CODE) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: CORS });
@@ -60,6 +60,8 @@ export async function onRequestPost(context) {
     title: title.trim(),
     description: description?.trim() || null,
     deadline: deadline || null,
+    deadline_time: deadline_time || null,
+    deadline_tz: deadline_tz || null,
     department: department?.trim() || null,
     list_id: list_id || null,
     is_private: !!is_private,
@@ -123,7 +125,7 @@ export async function onRequestPut(context) {
     return new Response(JSON.stringify({ error: 'Invalid body' }), { status: 400, headers: CORS });
   }
 
-  const { adminCode, id, title, description, deadline, department, list_id, status, assignments } = body;
+  const { adminCode, id, title, description, deadline, deadline_time, deadline_tz, department, list_id, status, assignments } = body;
 
   if (adminCode !== env.ADMIN_CODE) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: CORS });
@@ -134,6 +136,8 @@ export async function onRequestPut(context) {
   if (title !== undefined) patch.title = title.trim();
   if (description !== undefined) patch.description = description?.trim() || null;
   if (deadline !== undefined) patch.deadline = deadline || null;
+  if (deadline_time !== undefined) patch.deadline_time = deadline_time || null;
+  if (deadline_tz !== undefined) patch.deadline_tz = deadline_tz || null;
   if (department !== undefined) patch.department = department?.trim() || null;
   if (list_id !== undefined) patch.list_id = list_id || null;
   if (status !== undefined) patch.status = status;

@@ -262,8 +262,7 @@
           <button class="btn btn-danger-ghost btn-sm" id="clearAllDoneBtn" onclick="clearCompletedTasks(null)" title="Delete all completed tasks across every folder">Clear all done</button>
           <button class="btn btn-secondary btn-sm" id="generateSummaryBtn">Copy All Summary</button>
           <button class="btn btn-secondary btn-sm" id="newListBtn">+ New Folder</button>
-          <button class="btn btn-secondary btn-sm" onclick="document.getElementById('docxImportInput').click()">⬆ Import .docx</button>
-          <input type="file" id="docxImportInput" accept=".docx" style="display:none;" onchange="onDocxFileSelected(this)" />
+          <button class="btn btn-secondary btn-sm" onclick="openImportNotesModal()">⬆ Import Notes</button>
           <button class="btn btn-primary" id="newTaskBtn">+ New Task</button>
         </div>
       </div>
@@ -405,7 +404,12 @@
       </div>
       <div class="form-group">
         <label for="taskDeadlineInput">Deadline</label>
-        <input type="date" id="taskDeadlineInput" />
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
+          <input type="date" id="taskDeadlineInput" style="flex:1;min-width:140px;" />
+          <input type="time" id="taskDeadlineTimeInput" style="flex:1;min-width:110px;" />
+          <select id="taskTimezoneSelect" style="flex:1;min-width:160px;padding:0.4rem 0.5rem;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:0.85rem;">
+          </select>
+        </div>
       </div>
       <div class="form-group">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.35rem;">
@@ -473,34 +477,50 @@
   </div>
 </div>
 
-<!-- ── Docx Import Modal ── -->
-<div id="docxImportModal" class="modal-backdrop hidden">
-  <div class="modal" style="max-width:640px;max-height:90vh;display:flex;flex-direction:column;">
+<!-- ── Notes Import Modal ── -->
+<div id="notesImportModal" class="modal-backdrop hidden">
+  <div class="modal" style="max-width:660px;max-height:92vh;display:flex;flex-direction:column;">
     <div class="modal-header">
-      <h3 style="flex:1;">Import Tasks from Document</h3>
-      <button class="btn-icon" onclick="closeDocxImport()">✕</button>
+      <h3 style="flex:1;" id="importModalTitle">Import Notes</h3>
+      <button class="btn-icon" onclick="closeImportNotesModal()">✕</button>
     </div>
-    <div class="modal-body" style="flex:1;overflow-y:auto;padding-bottom:0;">
-      <!-- Folder selector -->
-      <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1rem;flex-wrap:wrap;">
-        <label style="font-size:0.85rem;font-weight:600;white-space:nowrap;">Add to folder:</label>
-        <select id="importFolderSelect" style="flex:1;min-width:150px;padding:0.35rem 0.6rem;border-radius:8px;border:1.5px solid var(--border);font-family:inherit;font-size:0.85rem;">
-          <option value="">No folder</option>
+
+    <!-- Step 1: Paste -->
+    <div id="importStep1" class="modal-body" style="flex:1;overflow-y:auto;">
+      <p class="text-muted text-sm" style="margin-bottom:0.75rem;">Paste your notes below. Format: <code>First Last task description</code> — one task per line. Indented lines become task descriptions.</p>
+      <textarea id="importNotesInput" rows="14"
+        style="width:100%;font-family:inherit;font-size:0.85rem;padding:0.65rem 0.75rem;border:1.5px solid var(--border);border-radius:10px;resize:vertical;line-height:1.55;"
+        placeholder="Cadence Bernstein check back in w Jordan Hall&#10;Sofia Belgiovine updated script breakdown&#10;@ALL PRODUCERS: send S&S emails&#10;  sub-note indented like this"></textarea>
+      <div id="importParseError" class="error-msg hidden" style="margin-top:0.5rem;"></div>
+    </div>
+
+    <!-- Step 2: Preview -->
+    <div id="importStep2" class="modal-body hidden" style="flex:1;overflow-y:auto;padding-bottom:0;">
+      <!-- Bulk folder + controls -->
+      <div style="display:flex;align-items:center;gap:0.65rem;margin-bottom:0.75rem;flex-wrap:wrap;">
+        <label style="font-size:0.82rem;font-weight:600;white-space:nowrap;">Set all to folder:</label>
+        <select id="importBulkFolder" onchange="importSetAllFolders(this.value)"
+          style="padding:0.3rem 0.55rem;border-radius:8px;border:1.5px solid var(--border);font-family:inherit;font-size:0.82rem;">
+          <option value="">— keep individual —</option>
+          <option value="__none__">No folder</option>
         </select>
-        <span id="importTaskCount" style="font-size:0.82rem;color:var(--text-muted);white-space:nowrap;"></span>
+        <div style="margin-left:auto;display:flex;gap:0.4rem;">
+          <button class="btn btn-ghost btn-sm" onclick="importSelectAll(true)">All</button>
+          <button class="btn btn-ghost btn-sm" onclick="importSelectAll(false)">None</button>
+        </div>
+        <span id="importTaskCount" style="font-size:0.8rem;color:var(--text-muted);"></span>
       </div>
-      <!-- Select / deselect all -->
-      <div style="display:flex;gap:0.5rem;margin-bottom:0.75rem;">
-        <button class="btn btn-ghost btn-sm" onclick="importSelectAll(true)">Select all</button>
-        <button class="btn btn-ghost btn-sm" onclick="importSelectAll(false)">Deselect all</button>
-      </div>
+      <!-- Warning for unmatched names -->
+      <div id="importUnmatchedWarn" class="hidden" style="background:#fff7ed;border:1.5px solid #f97316;border-radius:8px;padding:0.5rem 0.75rem;font-size:0.8rem;color:#9a3412;margin-bottom:0.75rem;"></div>
       <!-- Task preview list -->
-      <div id="importPreviewList" style="display:flex;flex-direction:column;gap:0.4rem;"></div>
+      <div id="importPreviewList" style="display:flex;flex-direction:column;gap:0.35rem;"></div>
     </div>
+
     <div class="modal-footer" style="flex-shrink:0;">
       <div id="importError" class="error-msg hidden" style="flex:1;margin:0;"></div>
-      <button class="btn btn-ghost" onclick="closeDocxImport()">Cancel</button>
-      <button class="btn btn-primary" id="confirmImportBtn" onclick="confirmDocxImport()">Import Tasks</button>
+      <button class="btn btn-ghost" onclick="closeImportNotesModal()">Cancel</button>
+      <button class="btn btn-secondary" id="importBackBtn" onclick="importGoBack()" style="display:none;">← Back</button>
+      <button class="btn btn-primary" id="importActionBtn" onclick="importAction()">Parse Notes →</button>
     </div>
   </div>
 </div>
@@ -815,8 +835,6 @@ bob@example.com" style="width:100%;font-size:0.82rem;font-family:monospace;borde
 
 <!-- Supabase CDN -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<!-- JSZip for .docx import -->
-<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="/js/config.js"></script>
 <script src="/js/utils.js"></script>
 <script src="/js/admin.js"></script>

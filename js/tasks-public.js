@@ -3,7 +3,7 @@
 // ─────────────────────────────────────────────────────────
 
 let currentUserEmail = null, currentUserName = null, currentIdToken = null;
-let publicTasks = [], openDetailTaskId = null;
+let publicTasks = [], openDetailTaskId = null, publicFolders = [];
 
 // ── Comment notification tracking ────────────────────────
 function getSeenComments() {
@@ -133,9 +133,13 @@ function searchByName(query) {
 async function loadPublicTasks() {
   show('tasksPublicLoading');
   try {
-    const res = await fetch('/api/tasks');
-    if (!res.ok) throw new Error();
-    publicTasks = await res.json();
+    const [tasksRes, foldersRes] = await Promise.all([
+      fetch('/api/tasks'),
+      fetch('/api/task-lists'),
+    ]);
+    if (!tasksRes.ok) throw new Error();
+    publicTasks  = await tasksRes.json();
+    publicFolders = foldersRes.ok ? await foldersRes.json() : [];
   } catch {
     showToast('Failed to load tasks.', 'error');
   } finally {
@@ -164,33 +168,54 @@ function deadlineLabel(deadline) {
   return `Due in ${days}d`;
 }
 
+// ── Folder-grouped rendering helper ──────────────────────
+function renderTasksByFolder(tasks, cardFn) {
+  if (!tasks.length) return '<p class="text-muted text-sm" style="padding:0.5rem 0;">No tasks.</p>';
+
+  // Build ordered folder list from publicFolders + derive any missing from tasks
+  const folderMap = new Map();
+  publicFolders.forEach(f => folderMap.set(f.id, { ...f, tasks: [] }));
+  // Tasks with no folder or folder not in list
+  folderMap.set(null, { id: null, name: 'No Folder', tasks: [] });
+
+  tasks.forEach(t => {
+    const fid = t.list_id || null;
+    if (!folderMap.has(fid)) {
+      folderMap.set(fid, { id: fid, name: t.todo_lists?.name || 'Folder', tasks: [] });
+    }
+    folderMap.get(fid).tasks.push(t);
+  });
+
+  // Sort tasks within each folder: active first, then done; by deadline
+  let html = '';
+  folderMap.forEach(({ name, tasks: ft, id: fid }) => {
+    if (!ft.length) return;
+    const active = ft.filter(t => t.status !== 'complete')
+      .sort((a, b) => (a.deadline || 'z').localeCompare(b.deadline || 'z'));
+    const done = ft.filter(t => t.status === 'complete');
+
+    html += `<div class="pub-folder-group">
+      <div class="pub-folder-header">${escHtml(name)}</div>
+      <div class="task-pub-list">
+        ${active.map(t => cardFn(t)).join('')}
+        ${done.length ? `
+          <details class="task-done-group">
+            <summary class="task-done-summary">${done.length} completed</summary>
+            <div class="task-pub-list" style="margin-top:0.4rem;">${done.map(t => cardFn(t)).join('')}</div>
+          </details>` : ''}
+      </div>
+    </div>`;
+  });
+  return html || '<p class="text-muted text-sm" style="padding:0.5rem 0;">No tasks.</p>';
+}
+
 // ── Render my tasks ───────────────────────────────────────
 function renderMyTasks() {
   const myTasks = publicTasks.filter(t =>
     (t.task_assignments || []).some(a => a.assignee_email === currentUserEmail)
   );
   const el = document.getElementById('myTasksList');
-
-  if (!myTasks.length) {
-    el.innerHTML = '<p class="text-muted text-sm" style="padding:0.5rem 0;">No tasks assigned to you yet.</p>';
-    return;
-  }
-
-  const active = myTasks.filter(t => t.status !== 'complete');
-  const done   = myTasks.filter(t => t.status === 'complete');
-  const sorted = [
-    ...active.sort((a, b) => (a.deadline || 'z').localeCompare(b.deadline || 'z')),
-    ...done,
-  ];
-
-  el.innerHTML = `<div class="task-pub-list">
-    ${active.map(t => myTaskCardHtml(t)).join('')}
-    ${done.length ? `
-      <details class="task-done-group">
-        <summary class="task-done-summary">${done.length} completed task${done.length > 1 ? 's' : ''}</summary>
-        <div class="task-pub-list" style="margin-top:0.4rem;">${done.map(t => myTaskCardHtml(t)).join('')}</div>
-      </details>` : ''}
-  </div>`;
+  el.innerHTML = renderTasksByFolder(myTasks, myTaskCardHtml);
 }
 
 const PUB_STATUS_LABELS = { todo: 'To Do', in_progress: 'In Progress', complete: 'Complete' };
@@ -235,41 +260,34 @@ async function setPubTaskStatus(taskId, newStatus) {
 }
 
 // ── Render all tasks ──────────────────────────────────────
+function allTaskCardHtml(t) {
+  const isMine = (t.task_assignments || []).some(a => a.assignee_email === currentUserEmail);
+  const dClass = deadlineClass(t.deadline);
+  return `
+    <div class="task-pub-card ${t.status === 'complete' ? 'task-card-done' : ''} ${dClass} ${isMine ? 'task-card-mine' : ''}" data-task-id="${t.id}"
+         onclick="openPubTaskDetail('${t.id}')">
+      <div style="flex:1;min-width:0;">
+        <div class="task-card-title ${t.status === 'complete' ? 'task-done' : ''}">${escHtml(t.title)}${commentBadgeHtml(t)}</div>
+        <div class="task-card-meta" style="margin-top:0.25rem;">
+          ${t.deadline ? `<span class="task-deadline-pill ${dClass}">${deadlineLabel(t.deadline)}</span>` : ''}
+          ${t.status !== 'todo' ? `<span class="task-tag" style="background:var(--surface2);color:var(--text-muted);">${PUB_STATUS_LABELS[t.status] || t.status}</span>` : ''}
+          ${(t.task_assignments||[]).map(a =>
+            `<span class="task-chip ${a.assignee_email===currentUserEmail?'task-chip-me':''}">${escHtml(a.assignee_name||a.assignee_email)}</span>`
+          ).join('')}
+        </div>
+      </div>
+      <div class="task-card-arrow">›</div>
+    </div>`;
+}
+
 function renderAllTasks() {
   const el = document.getElementById('allTasksList');
-  const statusOrder = { in_progress: 0, todo: 1, complete: 2 };
   // Exclude tasks already shown in "Your Tasks"
   const myEmails = new Set(currentUserEmail ? [currentUserEmail] : []);
   const nonMyTasks = publicTasks.filter(t =>
     !(t.task_assignments || []).some(a => myEmails.has(a.assignee_email))
   );
-  const sorted = [...nonMyTasks].sort((a, b) => (statusOrder[a.status] ?? 1) - (statusOrder[b.status] ?? 1));
-
-  if (!sorted.length) {
-    el.innerHTML = '<p class="text-muted text-sm" style="padding:0.5rem 0;">No tasks yet.</p>';
-    return;
-  }
-
-  el.innerHTML = `<div class="task-pub-list">${sorted.map(t => {
-    const isMine = (t.task_assignments || []).some(a => a.assignee_email === currentUserEmail);
-    const dClass = deadlineClass(t.deadline);
-    return `
-      <div class="task-pub-card ${t.status === 'complete' ? 'task-card-done' : ''} ${dClass} ${isMine ? 'task-card-mine' : ''}" data-task-id="${t.id}"
-           onclick="openPubTaskDetail('${t.id}')">
-        <div style="flex:1;min-width:0;">
-          <div class="task-card-title ${t.status === 'complete' ? 'task-done' : ''}">${escHtml(t.title)}${commentBadgeHtml(t)}</div>
-          <div class="task-card-meta" style="margin-top:0.25rem;">
-            ${t.department ? `<span class="task-tag">${escHtml(t.department)}</span>` : ''}
-            ${t.deadline   ? `<span class="task-deadline-pill ${dClass}">${deadlineLabel(t.deadline)}</span>` : ''}
-            ${t.status !== 'todo' ? `<span class="task-tag" style="background:var(--surface2);color:var(--text-muted);">${PUB_STATUS_LABELS[t.status] || t.status}</span>` : ''}
-            ${(t.task_assignments||[]).map(a =>
-              `<span class="task-chip ${a.assignee_email===currentUserEmail?'task-chip-me':''}">${escHtml(a.assignee_name||a.assignee_email)}</span>`
-            ).join('')}
-          </div>
-        </div>
-        <div class="task-card-arrow">›</div>
-      </div>`;
-  }).join('')}</div>`;
+  el.innerHTML = renderTasksByFolder(nonMyTasks, allTaskCardHtml);
 }
 
 // ── Task detail modal (public) ────────────────────────────

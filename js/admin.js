@@ -586,14 +586,15 @@ function deadlineClass(deadline) {
   return 'deadline-far';
 }
 
-function deadlineLabel(deadline) {
+function deadlineLabel(deadline, time) {
   const dt = safeDate(deadline);
   if (!dt) return '';
   const days = Math.ceil((dt - new Date()) / 86400000);
-  if (days < 0)   return `Overdue by ${Math.abs(days)}d`;
-  if (days === 0) return 'Due today';
-  if (days === 1) return 'Due tomorrow';
-  return `Due in ${days}d`;
+  const timeSuffix = time ? ` ${_fmt12h(time)}` : '';
+  if (days < 0)   return `Overdue by ${Math.abs(days)}d${timeSuffix}`;
+  if (days === 0) return `Due today${timeSuffix}`;
+  if (days === 1) return `Due tomorrow${timeSuffix}`;
+  return `Due in ${days}d${timeSuffix}`;
 }
 
 // ── Share link ────────────────────────────────────────────
@@ -661,7 +662,7 @@ function renderPrivateTasks(tasks) {
           onchange="togglePrivateTaskStatus('${t.id}', this.checked)" />
         <span class="private-task-title ${t.status === 'complete' ? 'task-done' : ''}">${escHtml(t.title)}</span>
       </label>
-      ${t.deadline ? `<span class="task-deadline-pill ${deadlineClass(t.deadline)}">${deadlineLabel(t.deadline)}</span>` : ''}
+      ${t.deadline ? `<span class="task-deadline-pill ${deadlineClass(t.deadline)}">${deadlineLabel(t.deadline, t.deadline_time)}</span>` : ''}
       <button class="btn-icon text-danger" onclick="deleteTask('${t.id}')" title="Delete">✕</button>
     </div>`).join('');
 }
@@ -694,7 +695,8 @@ function cancelPrivateTask() {
 // ── Shared tasks ──────────────────────────────────────────
 // ── Filter / search state ─────────────────────────────────
 let taskStatusFilter = 'all';
-let collapsedLists   = new Set();
+let collapsedLists   = (() => { try { return new Set(JSON.parse(localStorage.getItem('claire_collapsed_lists') || '[]')); } catch { return new Set(); } })();
+function _saveCollapsedLists() { try { localStorage.setItem('claire_collapsed_lists', JSON.stringify([...collapsedLists])); } catch {} }
 let focusAssignee    = '';
 let taskDensity      = (() => { try { return localStorage.getItem('claire_task_density') || 'comfortable'; } catch { return 'comfortable'; } })();
 
@@ -1005,7 +1007,7 @@ function kanbanCardHtml(t) {
     ${descHtml}
     <div class="kanban-card-meta">
       ${listName ? `<span class="task-tag task-list-tag" style="font-size:0.7rem;">${escHtml(listName)}</span>` : ''}
-      ${t.deadline ? `<span class="task-deadline-pill ${dClass}" style="font-size:0.7rem;">${deadlineLabel(t.deadline)}</span>` : ''}
+      ${t.deadline ? `<span class="task-deadline-pill ${dClass}" style="font-size:0.7rem;">${deadlineLabel(t.deadline, t.deadline_time)}</span>` : ''}
     </div>
     ${assignments.length ? `<div class="kanban-card-assignees">${avatars}${moreAv}</div>` : ''}
   </div>`;
@@ -1195,6 +1197,7 @@ function toggleListCollapse(colKey) {
   } else {
     collapsedLists.add(colKey);
   }
+  _saveCollapsedLists();
   const selector = colKey === 'null' ? '[data-list=""]' : `[data-list="${colKey}"]`;
   document.querySelector(`.task-group${selector}`)?.classList.toggle('task-group-collapsed');
 }
@@ -1219,7 +1222,8 @@ function taskCardHtml(t, showListTag = false) {
     ? (() => {
         const fullDate = isDetailed
           ? safeDate(t.deadline).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
-          : deadlineLabel(t.deadline);
+            + (t.deadline_time ? ` at ${_fmt12h(t.deadline_time)}` : '')
+          : deadlineLabel(t.deadline, t.deadline_time);
         return `<span class="task-deadline-pill ${dClass} deadline-pill-always">${fullDate}</span>`;
       })()
     : '';
@@ -1367,6 +1371,28 @@ async function submitAdminComment() {
 function closeTaskDetail() { hide('taskDetailModal'); detailTaskId = null; }
 
 // ── Task create/edit modal ────────────────────────────────
+const COMMON_TIMEZONES = [
+  'America/New_York','America/Chicago','America/Denver','America/Los_Angeles',
+  'America/Anchorage','Pacific/Honolulu','America/Toronto','America/Vancouver',
+  'America/Sao_Paulo','America/Buenos_Aires','America/Mexico_City',
+  'Europe/London','Europe/Paris','Europe/Berlin','Europe/Rome','Europe/Madrid',
+  'Europe/Amsterdam','Europe/Stockholm','Europe/Moscow','Africa/Johannesburg',
+  'Asia/Dubai','Asia/Kolkata','Asia/Bangkok','Asia/Singapore','Asia/Shanghai',
+  'Asia/Tokyo','Asia/Seoul','Australia/Sydney','Pacific/Auckland',
+];
+
+function _populateTimezoneSelect() {
+  const sel = document.getElementById('taskTimezoneSelect');
+  if (!sel || sel.options.length > 1) return; // already populated
+  const local = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const zones = COMMON_TIMEZONES.includes(local)
+    ? COMMON_TIMEZONES
+    : [local, ...COMMON_TIMEZONES];
+  sel.innerHTML = zones.map(tz =>
+    `<option value="${tz}" ${tz === local ? 'selected' : ''}>${tz.replace(/_/g,' ')}</option>`
+  ).join('');
+}
+
 function openTaskModal(task = null) {
   editingTaskId = task?.id || null;
   document.getElementById('taskModalTitle').textContent = task ? 'Edit Task' : 'New Task';
@@ -1374,6 +1400,12 @@ function openTaskModal(task = null) {
   document.getElementById('taskTitleInput').value = task?.title || '';
   document.getElementById('taskDescInput').value  = task?.description || '';
   document.getElementById('taskDeadlineInput').value = task?.deadline ? task.deadline.slice(0,10) : '';
+  document.getElementById('taskDeadlineTimeInput').value = task?.deadline_time || '';
+  _populateTimezoneSelect();
+  if (task?.deadline_tz) {
+    const sel = document.getElementById('taskTimezoneSelect');
+    if (sel) sel.value = task.deadline_tz;
+  }
   document.getElementById('taskModalError').classList.add('hidden');
   // Reset inline list form if open
   toggleInlineNewList(false);
@@ -1382,9 +1414,18 @@ function openTaskModal(task = null) {
   const sel = document.getElementById('taskListSelect');
   sel.innerHTML = '<option value="">— No folder —</option>' +
     allTaskLists.map(l => `<option value="${l.id}" ${task?.list_id === l.id ? 'selected' : ''}>${escHtml(l.name)}</option>`).join('');
+  sel.onchange = () => {
+    // Pre-populate default assignees when folder changes (new task only, don't override editing)
+    if (!editingTaskId) _applyFolderDefaultAssignees(sel.value);
+  };
 
-  // Render existing assignees
-  renderTaskAssignees(task?.task_assignments || []);
+  // Render existing assignees (for new task, also apply folder defaults if folder pre-selected)
+  if (task) {
+    renderTaskAssignees(task.task_assignments || []);
+  } else {
+    renderTaskAssignees([]);
+    if (sel.value) _applyFolderDefaultAssignees(sel.value);
+  }
 
   // Load contact picker
   loadContactsForTaskPicker(task?.task_assignments || []);
@@ -1403,8 +1444,20 @@ function closeTaskModal() {
 let taskAssigneeList = []; // [{name, email}]
 
 function renderTaskAssignees(assignments) {
-  taskAssigneeList = assignments.map(a => ({ name: a.assignee_name || '', email: a.assignee_email }));
+  taskAssigneeList = assignments.map(a => ({ name: a.assignee_name || a.name || '', email: a.assignee_email || a.email }));
   refreshTaskAssigneeDisplay();
+}
+
+function _applyFolderDefaultAssignees(listId) {
+  if (!listId) return;
+  const folder = allTaskLists.find(l => l.id === listId);
+  const defaults = folder?.default_assignees || [];
+  if (!defaults.length) return;
+  // Add defaults that aren't already in the list
+  const existing = new Set(taskAssigneeList.map(a => a.email));
+  defaults.forEach(a => { if (a.email && !existing.has(a.email)) taskAssigneeList.push({ name: a.name || '', email: a.email }); });
+  refreshTaskAssigneeDisplay();
+  loadContactsForTaskPicker(taskAssigneeList);
 }
 
 function refreshTaskAssigneeDisplay() {
@@ -1469,18 +1522,25 @@ function renderAssignPickerWith(query, currentAssignments) {
 function toggleTaskAssignee(checkbox, name, email) {
   if (checkbox.checked) {
     taskAssigneeList.push({ name, email });
+    // Clear search and re-render picker without the newly added person
+    const searchEl = document.getElementById('assignPickerSearch');
+    if (searchEl) { searchEl.value = ''; }
+    renderAssignPickerWith('', taskAssigneeList);
   } else {
     taskAssigneeList = taskAssigneeList.filter(a => a.email !== email);
+    renderAssignPickerWith(document.getElementById('assignPickerSearch')?.value || '', taskAssigneeList);
   }
   refreshTaskAssigneeDisplay();
 }
 
 async function saveTask() {
-  const title    = document.getElementById('taskTitleInput').value.trim();
-  const desc     = document.getElementById('taskDescInput').value.trim();
-  const deadline = document.getElementById('taskDeadlineInput').value;
-  const listId   = document.getElementById('taskListSelect').value;
-  const errEl    = document.getElementById('taskModalError');
+  const title         = document.getElementById('taskTitleInput').value.trim();
+  const desc          = document.getElementById('taskDescInput').value.trim();
+  const deadline      = document.getElementById('taskDeadlineInput').value;
+  const deadlineTime  = document.getElementById('taskDeadlineTimeInput').value || null;
+  const deadlineTz    = document.getElementById('taskTimezoneSelect').value || Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const listId        = document.getElementById('taskListSelect').value;
+  const errEl         = document.getElementById('taskModalError');
 
   errEl.classList.add('hidden');
   if (!title) { errEl.textContent = 'Title is required.'; errEl.classList.remove('hidden'); return; }
@@ -1492,6 +1552,8 @@ async function saveTask() {
     const body = {
       title, description: desc || null,
       deadline: deadline || null,
+      deadline_time: deadlineTime,
+      deadline_tz: deadline ? deadlineTz : null,
       list_id: listId || null,
       assignments: taskAssigneeList,
       adminCode: getAdminCode(),
@@ -1572,13 +1634,92 @@ function renderListManagerRows() {
     container.innerHTML = '<p class="text-muted text-sm" style="text-align:center;padding:0.5rem 0;">No folders yet.</p>';
     return;
   }
-  container.innerHTML = allTaskLists.map(l => `
-    <div class="list-manager-row" id="list-row-${l.id}">
-      <input class="list-manager-input" id="list-name-${l.id}" value="${escHtml(l.name)}"
-        onkeydown="if(event.key==='Enter'){event.preventDefault();renameList('${l.id}');}if(event.key==='Escape'){this.value=allTaskLists.find(x=>x.id==='${l.id}')?.name||'';}" />
-      <button class="btn btn-secondary btn-sm" onclick="renameList('${l.id}')">Save</button>
-      <button class="btn-icon text-danger" onclick="deleteList('${l.id}')" title="Delete folder">✕</button>
+  container.innerHTML = allTaskLists.map(l => {
+    const defaults = (l.default_assignees || []);
+    const chips = defaults.map((a, i) =>
+      `<span class="task-chip" style="font-size:0.75rem;">${escHtml(a.name || a.email)}<button class="btn-icon" style="margin-left:0.2rem;font-size:0.7rem;line-height:1;" onclick="removeDefaultAssignee('${l.id}',${i})">✕</button></span>`
+    ).join('');
+    return `
+    <div class="list-manager-row" id="list-row-${l.id}" style="flex-direction:column;align-items:stretch;gap:0.4rem;">
+      <div style="display:flex;align-items:center;gap:0.4rem;">
+        <input class="list-manager-input" id="list-name-${l.id}" value="${escHtml(l.name)}"
+          style="flex:1;"
+          onkeydown="if(event.key==='Enter'){event.preventDefault();renameList('${l.id}');}if(event.key==='Escape'){this.value=allTaskLists.find(x=>x.id==='${l.id}')?.name||'';}" />
+        <button class="btn btn-secondary btn-sm" onclick="renameList('${l.id}')">Save</button>
+        <button class="btn-icon text-danger" onclick="deleteList('${l.id}')" title="Delete folder">✕</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:0.4rem;flex-wrap:wrap;padding-left:0.25rem;">
+        <span style="font-size:0.72rem;color:var(--text-muted);font-weight:600;">Default:</span>
+        ${chips}
+        <button class="btn btn-ghost btn-sm" style="font-size:0.72rem;padding:0.15rem 0.45rem;" onclick="openDefaultAssigneePicker('${l.id}')">+ Add</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function openDefaultAssigneePicker(listId) {
+  const list = allTaskLists.find(l => l.id === listId);
+  if (!list) return;
+  const alreadyEmails = new Set((list.default_assignees || []).map(a => a.email));
+  const allContacts = (contactGroups || []).flatMap(g => g.members || []);
+  const available = allContacts.filter(m => m.email && !alreadyEmails.has(m.email));
+
+  if (!available.length) { showToast('No more contacts to add.', 'success'); return; }
+
+  // Simple prompt-style select via a quick inline dropdown in the row
+  const existingPicker = document.getElementById('defaultAssigneePicker');
+  if (existingPicker) existingPicker.remove();
+
+  const picker = document.createElement('div');
+  picker.id = 'defaultAssigneePicker';
+  picker.style.cssText = 'position:fixed;z-index:999;background:#fff;border:1.5px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.12);padding:0.4rem 0;min-width:200px;max-height:220px;overflow-y:auto;';
+  picker.innerHTML = available.map(m => `
+    <div style="padding:0.4rem 0.75rem;cursor:pointer;font-size:0.85rem;"
+      onmouseenter="this.style.background='var(--primary-pale)'"
+      onmouseleave="this.style.background=''"
+      onclick="addDefaultAssignee('${listId}','${escHtml(m.name)}','${escHtml(m.email)}');document.getElementById('defaultAssigneePicker')?.remove()">
+      <strong>${escHtml(m.name || m.email)}</strong>
+      ${m.email && m.name ? `<span style="color:var(--text-muted);font-size:0.75em;margin-left:0.3rem;">${escHtml(m.email)}</span>` : ''}
     </div>`).join('');
+
+  document.body.appendChild(picker);
+  // Position near the Add button
+  const btn = document.querySelector(`#list-row-${listId} button[onclick*="openDefaultAssigneePicker"]`);
+  if (btn) {
+    const r = btn.getBoundingClientRect();
+    picker.style.top = `${r.bottom + 4}px`;
+    picker.style.left = `${r.left}px`;
+  }
+  // Close on outside click
+  setTimeout(() => document.addEventListener('click', function _close(e) {
+    if (!picker.contains(e.target)) { picker.remove(); document.removeEventListener('click', _close); }
+  }), 50);
+}
+
+async function addDefaultAssignee(listId, name, email) {
+  const list = allTaskLists.find(l => l.id === listId);
+  if (!list) return;
+  const defaults = [...(list.default_assignees || []), { name, email }];
+  await _saveDefaultAssignees(listId, defaults);
+}
+
+async function removeDefaultAssignee(listId, idx) {
+  const list = allTaskLists.find(l => l.id === listId);
+  if (!list) return;
+  const defaults = (list.default_assignees || []).filter((_, i) => i !== idx);
+  await _saveDefaultAssignees(listId, defaults);
+}
+
+async function _saveDefaultAssignees(listId, defaults) {
+  const res = await fetch('/api/task-lists', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id: listId, default_assignees: defaults, adminCode: getAdminCode() }),
+  });
+  if (!res.ok) { showToast('Failed to save.', 'error'); return; }
+  const list = allTaskLists.find(l => l.id === listId);
+  if (list) list.default_assignees = defaults;
+  renderListManagerRows();
 }
 
 async function renameList(id) {
@@ -1703,11 +1844,24 @@ async function deleteList(id) {
 // ── Shared task line formatter ────────────────────────────
 function formatTaskLine(t) {
   const inProgress = t.status === 'in_progress';
-  const dueFmt     = t.deadline ? safeDate(t.deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : null;
+  let dueFmt = null;
+  if (t.deadline) {
+    const dateStr = safeDate(t.deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    const timeStr = t.deadline_time ? ` at ${_fmt12h(t.deadline_time)}` : '';
+    dueFmt = dateStr + timeStr;
+  }
   const assignees  = (t.task_assignments || []).map(a => a.assignee_name || a.assignee_email).join(', ');
   const parts      = [inProgress ? 'In Progress' : null, assignees || null, dueFmt ? `Due ${dueFmt}` : null].filter(Boolean);
-  // WhatsApp bold via asterisks; plain bullet for iMessage
   return `• ${inProgress ? '*' : ''}${t.title}${inProgress ? '*' : ''}${parts.length ? ' (' + parts.join(', ') + ')' : ''}`;
+}
+
+function _fmt12h(timeStr) {
+  // "14:30" → "2:30 PM"
+  if (!timeStr) return '';
+  const [h, m] = timeStr.split(':').map(Number);
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const h12  = h % 12 || 12;
+  return `${h12}:${String(m).padStart(2,'0')} ${ampm}`;
 }
 
 function copyListSummary(listId) {
@@ -1717,10 +1871,13 @@ function copyListSummary(listId) {
   );
   if (!tasks.length) { showToast('No active tasks in this list.', 'success'); return; }
 
+  const shareUrl = `${location.origin}/tasks`;
   const lines = [
     `*${listName}*`,
     '',
     ...tasks.map(formatTaskLine),
+    '',
+    shareUrl,
   ];
 
   navigator.clipboard.writeText(lines.join('\n'))
@@ -1749,6 +1906,9 @@ function generateTaskSummary() {
     tasks.forEach(t => sections.push(formatTaskLine(t)));
     sections.push('');
   });
+
+  const shareUrl = `${location.origin}/tasks`;
+  sections.push(shareUrl);
 
   navigator.clipboard.writeText(sections.join('\n').trimEnd())
     .then(() => showToast('Summary copied!', 'success'))
@@ -1852,7 +2012,7 @@ function bindUI() {
 
     // Escape → close any open modal
     if (e.key === 'Escape') {
-      const modals = ['taskDetailModal', 'newTaskModal', 'newListModal', 'pubTaskDetailModal', 'docxImportModal'];
+      const modals = ['taskDetailModal', 'newTaskModal', 'newListModal', 'pubTaskDetailModal', 'notesImportModal'];
       for (const id of modals) {
         const el = document.getElementById(id);
         if (el && !el.classList.contains('hidden')) {
@@ -3087,158 +3247,198 @@ function syncContactsToExpected() {
 
 // show/hide/escHtml defined in utils.js
 
-// ── Docx Import ───────────────────────────────────────────
+// ── Notes Import (text paste) ─────────────────────────────
 let importParsedTasks = [];
+let importStep = 1; // 1 = paste, 2 = preview
 
-async function onDocxFileSelected(input) {
-  const file = input.files[0];
-  input.value = ''; // reset so same file can be re-selected
-  if (!file) return;
-
-  let zip;
-  try {
-    zip = await JSZip.loadAsync(file);
-  } catch {
-    showToast('Could not read file. Make sure it is a .docx.', 'error');
-    return;
-  }
-
-  const xmlFile = zip.file('word/document.xml');
-  if (!xmlFile) {
-    showToast('Invalid .docx — no document.xml found.', 'error');
-    return;
-  }
-
-  const xmlText = await xmlFile.async('text');
-  importParsedTasks = parseDocxTasks(xmlText);
-
-  if (!importParsedTasks.length) {
-    showToast('No tasks found in this document.', 'error');
-    return;
-  }
-
-  openDocxImportModal();
+// ── Notes text parsing ────────────────────────────────────
+function _importFolderOptionsHtml() {
+  return '<option value="">No folder</option>' +
+    (allTaskLists || []).map(l => `<option value="${l.id}">${escHtml(l.name)}</option>`).join('');
 }
 
-function parseDocxTasks(xmlText) {
-  const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
-  const doc = new DOMParser().parseFromString(xmlText, 'application/xml');
-  const paras = Array.from(doc.getElementsByTagNameNS(W, 'p'));
-
-  const tasks = [];
-  let currentSection = '';
-
-  for (const p of paras) {
-    // Check list level
-    const numPr = p.querySelector
-      ? null // fallback below
-      : null;
-    const pPr = p.getElementsByTagNameNS(W, 'pPr')[0];
-    const numPrEl = pPr ? pPr.getElementsByTagNameNS(W, 'numPr')[0] : null;
-    const isList = !!numPrEl;
-    const ilvlEl = numPrEl ? numPrEl.getElementsByTagNameNS(W, 'ilvl')[0] : null;
-    const ilvl = ilvlEl ? parseInt(ilvlEl.getAttributeNS(W, 'val') || '0', 10) : 0;
-
-    // Extract full text
-    const allT = Array.from(p.getElementsByTagNameNS(W, 't'));
-    const fullText = allT.map(t => t.textContent).join('').trim();
-    if (!fullText) continue;
-
-    if (!isList) {
-      // Section header (e.g. "Producers:", "Post Production:")
-      currentSection = fullText.replace(/:$/, '').trim();
-      continue;
+function findContactByName(name) {
+  const q = name.trim().toLowerCase();
+  for (const g of (contactGroups || [])) {
+    for (const m of (g.members || [])) {
+      if ((m.name || '').toLowerCase() === q) return m;
+      // First-name + last-name partial match
+      const parts = (m.name || '').toLowerCase().split(/\s+/);
+      const qparts = q.split(/\s+/);
+      if (qparts.length >= 2 && parts[0] === qparts[0] && parts[parts.length - 1] === qparts[qparts.length - 1]) return m;
     }
-
-    if (ilvl >= 1) {
-      // Sub-note — attach to last task
-      if (tasks.length) {
-        tasks[tasks.length - 1].notes.push(fullText);
-      }
-      continue;
-    }
-
-    // Level 0 list item — may have a hyperlink assignee
-    const hyperlinks = Array.from(p.getElementsByTagNameNS(W, 'hyperlink'));
-    let assignee = '';
-    let taskTitle = fullText;
-
-    if (hyperlinks.length) {
-      const linkText = Array.from(hyperlinks[0].getElementsByTagNameNS(W, 't'))
-        .map(t => t.textContent).join('').trim();
-      assignee = linkText;
-      // Task title is everything after the hyperlink text
-      taskTitle = fullText.startsWith(assignee)
-        ? fullText.slice(assignee.length).trim()
-        : fullText;
-    }
-
-    if (!taskTitle) continue;
-
-    tasks.push({
-      section: currentSection,
-      assignee,
-      title: taskTitle,
-      notes: [],
-      selected: true,
-    });
   }
+  return null;
+}
 
+function _extractNamesAndTitle(line) {
+  // Handle "Name1 & Name2 task..." or "Name1& Name2 task..."
+  const multiRe = /^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\s*&\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\s+(.+)/;
+  const multi = line.match(multiRe);
+  if (multi) return { names: [multi[1].trim(), multi[2].trim()], title: multi[3].trim() };
+
+  // Single "First Last task..."
+  const single = line.match(/^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\s+(.+)/);
+  if (single) return { names: [single[1].trim()], title: single[2].trim() };
+
+  return { names: [], title: line.trim() };
+}
+
+function parseNotesText(text) {
+  const lines = text.split('\n');
+  const tasks = [];
+
+  for (const line of lines) {
+    if (!line.trim()) continue;
+
+    // Indented line = sub-note for last task
+    if (/^\s/.test(line)) {
+      if (tasks.length) tasks[tasks.length - 1].notes.push(line.trim());
+      continue;
+    }
+
+    const trimmed = line.trim();
+
+    // @ALL broadcast — treat whole line as task, no specific assignee
+    if (trimmed.startsWith('@')) {
+      const title = trimmed.replace(/^@[^:]+:\s*/, '').trim() || trimmed;
+      tasks.push({ names: [], resolvedAssignees: [], title, notes: [], selected: true, list_id: null });
+      continue;
+    }
+
+    // Section header lines like "Producers:" or "Post Production:" (no task pattern match)
+    const { names, title } = _extractNamesAndTitle(trimmed);
+    if (!title || (!names.length && /^[A-Z][^a-z]/.test(trimmed) && trimmed.endsWith(':'))) continue;
+
+    // Resolve names → contacts
+    const resolvedAssignees = [];
+    const unresolvedNames = [];
+    for (const name of names) {
+      const contact = findContactByName(name);
+      if (contact) {
+        resolvedAssignees.push({ name: contact.name, email: contact.email });
+      } else {
+        unresolvedNames.push(name);
+      }
+    }
+
+    tasks.push({ names, resolvedAssignees, unresolvedNames, title, notes: [], selected: true, list_id: null });
+  }
   return tasks;
 }
 
-function openDocxImportModal() {
-  // Populate folder dropdown
-  const sel = document.getElementById('importFolderSelect');
-  sel.innerHTML = '<option value="">No folder</option>';
-  (allTaskLists || []).forEach(l => {
-    const opt = document.createElement('option');
-    opt.value = l.id;
-    opt.textContent = l.name;
-    sel.appendChild(opt);
-  });
-
-  renderImportPreview();
-  show('docxImportModal');
+// ── Import modal open/close/navigate ─────────────────────
+function openImportNotesModal() {
+  importStep = 1;
+  importParsedTasks = [];
+  document.getElementById('importNotesInput').value = '';
+  hide('importParseError');
+  hide('importStep2');
+  show('importStep1');
+  document.getElementById('importBackBtn').style.display = 'none';
+  document.getElementById('importActionBtn').textContent = 'Parse Notes →';
+  document.getElementById('importModalTitle').textContent = 'Import Notes';
+  hide('importError');
+  show('notesImportModal');
+  setTimeout(() => document.getElementById('importNotesInput').focus(), 50);
 }
 
-function renderImportPreview() {
-  const list = document.getElementById('importPreviewList');
-  const count = importParsedTasks.filter(t => t.selected).length;
-  document.getElementById('importTaskCount').textContent =
-    `${count} of ${importParsedTasks.length} tasks selected`;
+function closeImportNotesModal() {
+  hide('notesImportModal');
+  importParsedTasks = [];
+}
 
+function importGoBack() {
+  importStep = 1;
+  show('importStep1');
+  hide('importStep2');
+  document.getElementById('importBackBtn').style.display = 'none';
+  document.getElementById('importActionBtn').textContent = 'Parse Notes →';
+  document.getElementById('importModalTitle').textContent = 'Import Notes';
+}
+
+function importAction() {
+  if (importStep === 1) {
+    _importParse();
+  } else {
+    _importConfirm();
+  }
+}
+
+function _importParse() {
+  const text = document.getElementById('importNotesInput').value.trim();
+  if (!text) {
+    document.getElementById('importParseError').textContent = 'Paste some notes first.';
+    show('importParseError');
+    return;
+  }
+  hide('importParseError');
+
+  importParsedTasks = parseNotesText(text);
   if (!importParsedTasks.length) {
-    list.innerHTML = '<p class="text-muted text-sm">No tasks found.</p>';
+    document.getElementById('importParseError').textContent = 'No tasks found. Check the format.';
+    show('importParseError');
     return;
   }
 
-  let html = '';
-  let lastSection = null;
+  // Populate bulk folder select
+  const bulk = document.getElementById('importBulkFolder');
+  bulk.innerHTML = '<option value="">— keep individual —</option><option value="__none__">No folder</option>' +
+    (allTaskLists || []).map(l => `<option value="${l.id}">${escHtml(l.name)}</option>`).join('');
 
-  importParsedTasks.forEach((t, i) => {
-    if (t.section !== lastSection) {
-      lastSection = t.section;
-      if (t.section) {
-        html += `<div class="import-section-label">${escHtml(t.section)}</div>`;
-      }
-    }
+  // Show unmatched name warning
+  const unresolved = importParsedTasks.flatMap(t => t.unresolvedNames || []);
+  const uniqueUnresolved = [...new Set(unresolved)];
+  const warnEl = document.getElementById('importUnmatchedWarn');
+  if (uniqueUnresolved.length) {
+    warnEl.textContent = `These names weren't found in contacts and will be skipped: ${uniqueUnresolved.join(', ')}`;
+    show('importUnmatchedWarn');
+  } else {
+    hide('importUnmatchedWarn');
+  }
+
+  renderImportPreview();
+
+  importStep = 2;
+  hide('importStep1');
+  show('importStep2');
+  document.getElementById('importBackBtn').style.display = '';
+  document.getElementById('importActionBtn').textContent = 'Import Tasks';
+  document.getElementById('importModalTitle').textContent = `Review ${importParsedTasks.length} Tasks`;
+}
+
+function renderImportPreview() {
+  const selected = importParsedTasks.filter(t => t.selected).length;
+  document.getElementById('importTaskCount').textContent =
+    `${selected} of ${importParsedTasks.length} selected`;
+
+  const folderOpts = _importFolderOptionsHtml();
+  const list = document.getElementById('importPreviewList');
+
+  list.innerHTML = importParsedTasks.map((t, i) => {
+    const assigneeHtml = t.resolvedAssignees.length
+      ? t.resolvedAssignees.map(a => `<span class="task-chip" style="font-size:0.75rem;">${escHtml(a.name || a.email)}</span>`).join('')
+      : (t.names.length ? `<span style="font-size:0.75rem;color:var(--text-muted);font-style:italic;">${escHtml(t.names.join(', '))} (not in contacts)</span>` : '');
     const notesHtml = t.notes.length
-      ? `<div class="import-task-notes">${t.notes.map(n => `• ${escHtml(n)}`).join('<br>')}</div>`
-      : '';
-    html += `
-      <label class="import-task-row ${t.selected ? '' : 'import-task-deselected'}">
+      ? `<div class="import-task-notes">${t.notes.map(n => `• ${escHtml(n)}`).join('<br>')}</div>` : '';
+
+    return `
+      <div class="import-task-row ${t.selected ? '' : 'import-task-deselected'}">
         <input type="checkbox" ${t.selected ? 'checked' : ''}
-          onchange="importParsedTasks[${i}].selected=this.checked; renderImportPreview()" />
-        <div class="import-task-info">
+          onchange="importParsedTasks[${i}].selected=this.checked;
+            this.closest('.import-task-row').classList.toggle('import-task-deselected',!this.checked);
+            document.getElementById('importTaskCount').textContent=(importParsedTasks.filter(x=>x.selected).length)+' of '+importParsedTasks.length+' selected';" />
+        <div class="import-task-info" style="flex:1;min-width:0;">
           <div class="import-task-title">${escHtml(t.title)}</div>
-          ${t.assignee ? `<div class="import-task-assignee">${escHtml(t.assignee)}</div>` : ''}
+          ${assigneeHtml ? `<div style="margin-top:0.2rem;display:flex;gap:0.25rem;flex-wrap:wrap;">${assigneeHtml}</div>` : ''}
           ${notesHtml}
         </div>
-      </label>`;
-  });
-
-  list.innerHTML = html;
+        <select class="import-folder-sel" onchange="importParsedTasks[${i}].list_id=this.value||null"
+          style="font-size:0.75rem;padding:0.2rem 0.4rem;border:1px solid var(--border);border-radius:6px;font-family:inherit;flex-shrink:0;max-width:130px;">
+          ${folderOpts}
+        </select>
+      </div>`;
+  }).join('');
 }
 
 function importSelectAll(checked) {
@@ -3246,12 +3446,17 @@ function importSelectAll(checked) {
   renderImportPreview();
 }
 
-function closeDocxImport() {
-  hide('docxImportModal');
-  importParsedTasks = [];
+function importSetAllFolders(val) {
+  if (!val) return; // "— keep individual —"
+  const folderId = val === '__none__' ? null : val;
+  importParsedTasks.forEach(t => t.list_id = folderId);
+  // Update all the per-row selects to match
+  document.querySelectorAll('.import-folder-sel').forEach(sel => {
+    sel.value = folderId || '';
+  });
 }
 
-async function confirmDocxImport() {
+async function _importConfirm() {
   const selected = importParsedTasks.filter(t => t.selected);
   if (!selected.length) {
     document.getElementById('importError').textContent = 'Select at least one task.';
@@ -3260,31 +3465,13 @@ async function confirmDocxImport() {
   }
   hide('importError');
 
-  const listId = document.getElementById('importFolderSelect').value || null;
-  const btn = document.getElementById('confirmImportBtn');
+  const btn = document.getElementById('importActionBtn');
   btn.disabled = true;
   btn.textContent = 'Importing…';
 
   let failed = 0;
   for (const t of selected) {
-    // Build description from sub-notes
     const description = t.notes.length ? t.notes.join('\n') : null;
-
-    // Try to resolve assignee email from loaded tasks/contacts
-    const assignments = [];
-    if (t.assignee) {
-      // Check if we can match against existing assignees
-      const match = (allTasks || [])
-        .flatMap(task => task.task_assignments || [])
-        .find(a => (a.assignee_name || '').toLowerCase() === t.assignee.toLowerCase());
-      if (match) {
-        assignments.push({ email: match.assignee_email, name: match.assignee_name });
-      } else {
-        // Store name only — no email available without a contact lookup
-        assignments.push({ email: `${t.assignee.toLowerCase().replace(/\s+/g, '.')}@unknown`, name: t.assignee });
-      }
-    }
-
     const res = await fetch('/api/tasks', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -3292,8 +3479,8 @@ async function confirmDocxImport() {
         adminCode: getAdminCode(),
         title: t.title,
         description,
-        list_id: listId,
-        assignments,
+        list_id: t.list_id || null,
+        assignments: t.resolvedAssignees,
       }),
     });
     if (!res.ok) failed++;
@@ -3301,12 +3488,12 @@ async function confirmDocxImport() {
 
   btn.disabled = false;
   btn.textContent = 'Import Tasks';
-  closeDocxImport();
+  closeImportNotesModal();
   await loadTasks();
 
   if (failed) {
     showToast(`Imported ${selected.length - failed} tasks (${failed} failed).`, 'error');
   } else {
-    showToast(`Imported ${selected.length} task${selected.length > 1 ? 's' : ''} successfully.`, 'success');
+    showToast(`Imported ${selected.length} task${selected.length > 1 ? 's' : ''}.`, 'success');
   }
 }

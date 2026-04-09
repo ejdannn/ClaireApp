@@ -1778,6 +1778,8 @@ details[open] .contact-card-summary::before { content: '▾'; }
   padding: 0.35rem 0.4rem;
   position: relative;
   vertical-align: top;
+  min-width: 0;
+  overflow: hidden;
 }
 .cal-cell-empty { background: var(--surface2); }
 .cal-cell-today { background: var(--primary-pale); }
@@ -1811,6 +1813,8 @@ details[open] .contact-card-summary::before { content: '▾'; }
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+  max-width: 100%;
+  display: block;
   transition: filter 0.12s;
 }
 .cal-task-dot:hover { filter: brightness(0.93); }
@@ -2169,4 +2173,19 @@ details[open] .contact-card-summary::before { content: '▾'; }
   color: var(--text-muted);
   margin-top: 0.2rem;
   line-height: 1.5;
+}
+
+/* ── Public folder groups ────────────────────────────────── */
+.pub-folder-group {
+  margin-bottom: 1.25rem;
+}
+.pub-folder-header {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-muted);
+  padding: 0.4rem 0;
+  border-bottom: 1.5px solid var(--border);
+  margin-bottom: 0.5rem;
 }
