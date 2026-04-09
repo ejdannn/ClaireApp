@@ -2,6 +2,53 @@
 //  CLAIRE : Admin dashboard (admin.html)
 // ─────────────────────────────────────────────────────────
 
+// ── Confetti ──────────────────────────────────────────────
+function launchConfetti() {
+  const COLORS = ['#6366f1','#8b5cf6','#ec4899','#f59e0b','#10b981','#3b82f6','#f43f5e'];
+  const COUNT  = 90;
+  const canvas = document.createElement('canvas');
+  canvas.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:99999;';
+  canvas.width  = innerWidth;
+  canvas.height = innerHeight;
+  document.body.appendChild(canvas);
+  const ctx = canvas.getContext('2d');
+  const pieces = Array.from({ length: COUNT }, () => ({
+    x: Math.random() * canvas.width,
+    y: Math.random() * -canvas.height * 0.5,
+    r: 5 + Math.random() * 6,
+    color: COLORS[Math.floor(Math.random() * COLORS.length)],
+    angle: Math.random() * Math.PI * 2,
+    spin: (Math.random() - 0.5) * 0.2,
+    vx: (Math.random() - 0.5) * 4,
+    vy: 2 + Math.random() * 4,
+    shape: Math.random() < 0.5 ? 'rect' : 'circle',
+  }));
+  let frame;
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    let alive = false;
+    for (const p of pieces) {
+      p.x += p.vx; p.y += p.vy; p.angle += p.spin; p.vy += 0.12;
+      if (p.y < canvas.height + 20) alive = true;
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.angle);
+      ctx.fillStyle = p.color;
+      ctx.globalAlpha = Math.max(0, 1 - p.y / (canvas.height * 1.1));
+      if (p.shape === 'rect') {
+        ctx.fillRect(-p.r, -p.r * 0.5, p.r * 2, p.r);
+      } else {
+        ctx.beginPath(); ctx.arc(0, 0, p.r * 0.6, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.restore();
+    }
+    if (alive) { frame = requestAnimationFrame(draw); }
+    else { cancelAnimationFrame(frame); canvas.remove(); }
+  }
+  frame = requestAnimationFrame(draw);
+  setTimeout(() => { cancelAnimationFrame(frame); canvas.remove(); }, 4000);
+}
+
 let db, currentGroup, groupMembers = [], googleTokenClient;
 let allGroups = []; // full list — filter/sort operates on this
 
@@ -684,6 +731,7 @@ function renderPrivateTasks(tasks) {
 }
 
 async function togglePrivateTaskStatus(id, done) {
+  if (done) launchConfetti();
   await fetch('/api/tasks', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -1209,6 +1257,7 @@ function taskCardHtml(t, showListTag = false) {
 }
 
 async function updateTaskStatus(id, status) {
+  if (status === 'complete') launchConfetti();
   await fetch('/api/tasks', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
