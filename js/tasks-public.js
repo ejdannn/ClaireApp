@@ -149,9 +149,22 @@ async function loadPublicTasks() {
 }
 
 // ── Deadline helpers ──────────────────────────────────────
-function deadlineClass(deadline) {
+function deadlineClass(deadline, time) {
   if (!deadline) return '';
-  const days = (new Date(deadline) - new Date()) / 86400000;
+  const dt = new Date(String(deadline).slice(0, 10) + 'T00:00:00');
+  const now = new Date();
+  if (time) {
+    const [h, m] = time.split(':').map(Number);
+    const fullDt = new Date(dt);
+    fullDt.setHours(h, m, 0, 0);
+    const diffMs = fullDt - now;
+    if (diffMs < 0)       return 'deadline-overdue';
+    if (diffMs < 86400000) return 'deadline-today';
+    if (diffMs < 259200000) return 'deadline-soon';
+    if (diffMs < 604800000) return 'deadline-week';
+    return '';
+  }
+  const days = (dt - now) / 86400000;
   if (days < 0)  return 'deadline-overdue';
   if (days < 1)  return 'deadline-today';
   if (days < 3)  return 'deadline-soon';
@@ -159,13 +172,22 @@ function deadlineClass(deadline) {
   return '';
 }
 
-function deadlineLabel(deadline) {
+function deadlineLabel(deadline, time) {
   if (!deadline) return '';
-  const days = Math.ceil((new Date(deadline) - new Date()) / 86400000);
-  if (days < 0)  return `Overdue by ${Math.abs(days)}d`;
-  if (days === 0) return 'Due today';
-  if (days === 1) return 'Due tomorrow';
-  return `Due in ${days}d`;
+  const dt = new Date(String(deadline).slice(0, 10) + 'T00:00:00');
+  const timeSuffix = time ? ` ${_fmt12h(time)}` : '';
+  const days = Math.ceil((dt - new Date()) / 86400000);
+  if (days < 0)  return `Overdue by ${Math.abs(days)}d${timeSuffix}`;
+  if (days === 0) return `Due today${timeSuffix}`;
+  if (days === 1) return `Due tomorrow${timeSuffix}`;
+  return `Due in ${days}d${timeSuffix}`;
+}
+
+function _fmt12h(t) {
+  if (!t) return '';
+  const [h, m] = t.split(':').map(Number);
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${ampm}`;
 }
 
 // ── Folder-grouped rendering helper ──────────────────────
@@ -222,7 +244,7 @@ const PUB_STATUS_LABELS = { todo: 'To Do', in_progress: 'In Progress', complete:
 
 function myTaskCardHtml(t) {
   const myAssignment = (t.task_assignments || []).find(a => a.assignee_email === currentUserEmail);
-  const dClass = deadlineClass(t.deadline);
+  const dClass = deadlineClass(t.deadline, t.deadline_time);
   const s = t.status;
   return `
     <div class="task-pub-card ${s === 'complete' ? 'task-card-done' : ''} ${dClass} task-card-mine" data-task-id="${t.id}"
@@ -231,7 +253,7 @@ function myTaskCardHtml(t) {
         <div class="task-card-title ${s === 'complete' ? 'task-done' : ''}">${escHtml(t.title)}${commentBadgeHtml(t)}</div>
         <div class="task-card-meta" style="margin-top:0.25rem;">
           ${t.department ? `<span class="task-tag">${escHtml(t.department)}</span>` : ''}
-          ${t.deadline   ? `<span class="task-deadline-pill ${dClass}">${deadlineLabel(t.deadline)}</span>` : ''}
+          ${t.deadline   ? `<span class="task-deadline-pill ${dClass}">${deadlineLabel(t.deadline, t.deadline_time)}</span>` : ''}
           ${t.description ? `<span class="task-tag" style="background:var(--surface2);color:var(--text-muted);">Has details</span>` : ''}
         </div>
         <div class="pub-status-btns" onclick="event.stopPropagation()" style="margin-top:0.5rem;">
@@ -262,14 +284,14 @@ async function setPubTaskStatus(taskId, newStatus) {
 // ── Render all tasks ──────────────────────────────────────
 function allTaskCardHtml(t) {
   const isMine = (t.task_assignments || []).some(a => a.assignee_email === currentUserEmail);
-  const dClass = deadlineClass(t.deadline);
+  const dClass = deadlineClass(t.deadline, t.deadline_time);
   return `
     <div class="task-pub-card ${t.status === 'complete' ? 'task-card-done' : ''} ${dClass} ${isMine ? 'task-card-mine' : ''}" data-task-id="${t.id}"
          onclick="openPubTaskDetail('${t.id}')">
       <div style="flex:1;min-width:0;">
         <div class="task-card-title ${t.status === 'complete' ? 'task-done' : ''}">${escHtml(t.title)}${commentBadgeHtml(t)}</div>
         <div class="task-card-meta" style="margin-top:0.25rem;">
-          ${t.deadline ? `<span class="task-deadline-pill ${dClass}">${deadlineLabel(t.deadline)}</span>` : ''}
+          ${t.deadline ? `<span class="task-deadline-pill ${dClass}">${deadlineLabel(t.deadline, t.deadline_time)}</span>` : ''}
           ${t.status !== 'todo' ? `<span class="task-tag" style="background:var(--surface2);color:var(--text-muted);">${PUB_STATUS_LABELS[t.status] || t.status}</span>` : ''}
           ${(t.task_assignments||[]).map(a =>
             `<span class="task-chip ${a.assignee_email===currentUserEmail?'task-chip-me':''}">${escHtml(a.assignee_name||a.assignee_email)}</span>`
@@ -302,7 +324,7 @@ async function openPubTaskDetail(taskId) {
 
   const meta = [];
   if (t.department) meta.push(`<span class="task-tag">${escHtml(t.department)}</span>`);
-  if (t.deadline)   meta.push(`<span class="task-deadline-pill ${deadlineClass(t.deadline)}">${deadlineLabel(t.deadline)}</span>`);
+  if (t.deadline)   meta.push(`<span class="task-deadline-pill ${deadlineClass(t.deadline, t.deadline_time)}">${deadlineLabel(t.deadline, t.deadline_time)}</span>`);
   const statusLabels = { todo: 'To Do', in_progress: 'In Progress', complete: 'Complete' };
   meta.push(`<span class="task-tag" style="background:var(--surface2);color:var(--text-muted);">${statusLabels[t.status] || t.status}</span>`);
   document.getElementById('pubTaskDetailMeta').innerHTML = meta.join('');

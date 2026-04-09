@@ -253,9 +253,8 @@
           <h2>Shared Tasks</h2>
           <!-- List / Calendar / Kanban / Timeline toggle -->
           <div class="task-view-toggle">
-            <button class="task-view-btn active" id="viewListBtn"     onclick="setTaskView('list')"     title="List view">&#9776; List</button>
-            <button class="task-view-btn"        id="viewCalBtn"      onclick="setTaskView('calendar')" title="Calendar view">&#9635; Calendar</button>
-            <button class="task-view-btn"        id="viewKanbanBtn"   onclick="setTaskView('kanban')"   title="Kanban board">&#8999; Kanban</button>
+            <button class="task-view-btn active" id="viewListBtn" onclick="setTaskView('list')"     title="List view">&#9776; List</button>
+            <button class="task-view-btn"        id="viewCalBtn"  onclick="setTaskView('calendar')" title="Calendar view">&#9635; Calendar</button>
           </div>
         </div>
         <div style="display:flex;gap:0.5rem;align-items:center;">
@@ -330,45 +329,6 @@
         <div id="calNoDeadline" class="hidden" style="margin-top:1.25rem;">
           <div class="task-group-name" style="margin-bottom:0.5rem;color:var(--text-muted);font-size:0.8rem;text-transform:uppercase;letter-spacing:.05em;">No deadline</div>
           <div id="calNoDeadlineList"></div>
-        </div>
-      </div>
-
-      <!-- Kanban view -->
-      <div id="tasksKanbanView" class="hidden">
-        <div class="kanban-board">
-          <div class="kanban-col" id="kanbanTodoCol"
-               ondragover="event.preventDefault()"
-               ondragenter="this.classList.add('kanban-drag-over')"
-               ondragleave="this.classList.remove('kanban-drag-over')"
-               ondrop="kanbanDrop(event,'todo')">
-            <div class="kanban-col-header todo-header">
-              <span class="kanban-col-title">To Do</span>
-              <span class="kanban-col-count" id="kanbanTodoCount">0</span>
-            </div>
-            <div class="kanban-col-body" id="kanbanTodoBody"></div>
-          </div>
-          <div class="kanban-col" id="kanbanInProgressCol"
-               ondragover="event.preventDefault()"
-               ondragenter="this.classList.add('kanban-drag-over')"
-               ondragleave="this.classList.remove('kanban-drag-over')"
-               ondrop="kanbanDrop(event,'in_progress')">
-            <div class="kanban-col-header inprogress-header">
-              <span class="kanban-col-title">In Progress</span>
-              <span class="kanban-col-count" id="kanbanInProgressCount">0</span>
-            </div>
-            <div class="kanban-col-body" id="kanbanInProgressBody"></div>
-          </div>
-          <div class="kanban-col" id="kanbanCompleteCol"
-               ondragover="event.preventDefault()"
-               ondragenter="this.classList.add('kanban-drag-over')"
-               ondragleave="this.classList.remove('kanban-drag-over')"
-               ondrop="kanbanDrop(event,'complete')">
-            <div class="kanban-col-header complete-header">
-              <span class="kanban-col-title">Complete</span>
-              <span class="kanban-col-count" id="kanbanCompleteCount">0</span>
-            </div>
-            <div class="kanban-col-body" id="kanbanCompleteBody"></div>
-          </div>
         </div>
       </div>
 

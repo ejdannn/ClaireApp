@@ -573,10 +573,26 @@ function safeDate(d) {
   return new Date(String(d).slice(0, 10) + 'T00:00:00');
 }
 
-function deadlineClass(deadline) {
+function deadlineClass(deadline, time) {
+  if (!deadline) return '';
   const dt = safeDate(deadline);
   if (!dt) return '';
-  const days = (dt - new Date()) / 86400000;
+  const now = new Date();
+  if (time) {
+    const [h, m] = time.split(':').map(Number);
+    const fullDt = new Date(dt);
+    fullDt.setHours(h, m, 0, 0);
+    const diffMs = fullDt - now;
+    if (diffMs < 0) return 'deadline-overdue';
+    const diffDays = diffMs / 86400000;
+    if (diffDays < 1)  return 'deadline-today';
+    if (diffDays < 3)  return 'deadline-soon';
+    if (diffDays < 7)  return 'deadline-week';
+    if (diffDays < 14) return 'deadline-2wk';
+    if (diffDays < 30) return 'deadline-month';
+    return 'deadline-far';
+  }
+  const days = (dt - now) / 86400000;
   if (days < 0)   return 'deadline-overdue';
   if (days < 1)   return 'deadline-today';
   if (days < 3)   return 'deadline-soon';
@@ -656,13 +672,13 @@ function renderPrivateTasks(tasks) {
     return;
   }
   el.innerHTML = tasks.map(t => `
-    <div class="private-task-row ${deadlineClass(t.deadline)}">
+    <div class="private-task-row ${deadlineClass(t.deadline, t.deadline_time)}">
       <label class="private-task-check">
         <input type="checkbox" ${t.status === 'complete' ? 'checked' : ''}
           onchange="togglePrivateTaskStatus('${t.id}', this.checked)" />
         <span class="private-task-title ${t.status === 'complete' ? 'task-done' : ''}">${escHtml(t.title)}</span>
       </label>
-      ${t.deadline ? `<span class="task-deadline-pill ${deadlineClass(t.deadline)}">${deadlineLabel(t.deadline, t.deadline_time)}</span>` : ''}
+      ${t.deadline ? `<span class="task-deadline-pill ${deadlineClass(t.deadline, t.deadline_time)}">${deadlineLabel(t.deadline, t.deadline_time)}</span>` : ''}
       <button class="btn-icon text-danger" onclick="deleteTask('${t.id}')" title="Delete">✕</button>
     </div>`).join('');
 }
@@ -745,7 +761,6 @@ function onSortChange() {
 
 function applyTaskFilters() {
   // Delegate to the right view renderer if not in list mode
-  if (taskViewMode === 'kanban') { renderKanban(); updateOverdueBanner(); return; }
   if (taskViewMode === 'calendar') { renderCalendar(); updateOverdueBanner(); return; }
 
   const q = (document.getElementById('taskSearchInput')?.value || '').toLowerCase().trim();
@@ -754,7 +769,7 @@ function applyTaskFilters() {
   let filtered = shared.filter(t => {
     // Status filter — 'overdue' is a special value
     if (taskStatusFilter === 'overdue') {
-      if (deadlineClass(t.deadline) !== 'deadline-overdue' || t.status === 'complete') return false;
+      if (deadlineClass(t.deadline, t.deadline_time) !== 'deadline-overdue' || t.status === 'complete') return false;
     } else if (taskStatusFilter !== 'all' && t.status !== taskStatusFilter) {
       return false;
     }
@@ -789,15 +804,14 @@ function applyTaskFilters() {
 }
 
 // ── View state ─────────────────────────────────────────────
-let taskViewMode  = 'list';   // 'list' | 'calendar' | 'kanban' | 'timeline'
+let taskViewMode  = 'list';   // 'list' | 'calendar'
 let calYear  = new Date().getFullYear();
 let calMonth = new Date().getMonth(); // 0-based
 let calHeatmapOn = false;
-let kanbanDragId = null;
 
 function setTaskView(mode) {
   taskViewMode = mode;
-  ['list','cal','kanban'].forEach(v => {
+  ['list','cal'].forEach(v => {
     const btnId = 'view' + v.charAt(0).toUpperCase() + v.slice(1) + 'Btn';
     const modeKey = v === 'cal' ? 'calendar' : v;
     document.getElementById(btnId)?.classList.toggle('active', mode === modeKey);
@@ -806,17 +820,12 @@ function setTaskView(mode) {
   hide('tasksCalendarView');
   hide('tasksBody');
   hide('tasksNoResults');
-  hide('tasksKanbanView');
 
   if (mode === 'list') {
     applyTaskFilters();
   } else if (mode === 'calendar') {
     show('tasksCalendarView');
     renderCalendar();
-  } else if (mode === 'kanban') {
-    show('tasksKanbanView');
-    setDensity(taskDensity);
-    renderKanban();
   }
 
   try { localStorage.setItem('claire_admin_view', 'tasks'); } catch {}
@@ -844,8 +853,6 @@ function setDensity(d) {
   document.querySelectorAll('.density-btn').forEach(b => b.classList.toggle('active', b.dataset.density === d));
   const body = document.getElementById('tasksBody');
   if (body) { body.classList.remove('density-compact', 'density-comfortable', 'density-detailed'); body.classList.add('density-' + d); }
-  const kb = document.getElementById('tasksKanbanView');
-  if (kb) { kb.classList.remove('density-compact', 'density-comfortable', 'density-detailed'); kb.classList.add('density-' + d); }
 }
 
 // ── Focus (assignee filter) ────────────────────────────────
@@ -857,8 +864,7 @@ function setFocusAssignee(name, email) {
   if (input)   { input.value = name || ''; input.placeholder = email ? '' : 'Focus: all people…'; }
   if (clearBtn) clearBtn.classList.toggle('hidden', !email);
   if (dropdown) dropdown.classList.add('hidden');
-  if (taskViewMode === 'kanban') renderKanban();
-  else if (taskViewMode === 'calendar') renderCalendar();
+  if (taskViewMode === 'calendar') renderCalendar();
   else applyTaskFilters();
 }
 
@@ -948,7 +954,7 @@ function updateOverdueBanner() {
   const textEl  = document.getElementById('overdueBannerText');
   if (!banner || !textEl) return;
   const count = allTasks.filter(t =>
-    !t.is_private && t.status !== 'complete' && deadlineClass(t.deadline) === 'deadline-overdue'
+    !t.is_private && t.status !== 'complete' && deadlineClass(t.deadline, t.deadline_time) === 'deadline-overdue'
   ).length;
   if (count > 0) {
     textEl.textContent = `${count} task${count > 1 ? 's' : ''} overdue`;
@@ -964,65 +970,6 @@ function filterToOverdue() {
   document.querySelectorAll('#taskFilterChips .filter-chip').forEach(c => c.classList.remove('active'));
   if (taskViewMode !== 'list') setTaskView('list');
   else applyTaskFilters();
-}
-
-// ── Kanban board ───────────────────────────────────────────
-function renderKanban() {
-  const shared = allTasks.filter(t => !t.is_private);
-  const focused = focusAssignee
-    ? shared.filter(t => (t.task_assignments || []).some(a => a.assignee_email === focusAssignee))
-    : shared;
-
-  ['todo', 'in_progress', 'complete'].forEach(status => {
-    const tasks  = focused.filter(t => t.status === status);
-    const colId  = status === 'in_progress' ? 'kanbanInProgressBody'
-                 : status === 'todo'        ? 'kanbanTodoBody'
-                 :                            'kanbanCompleteBody';
-    const cntId  = status === 'in_progress' ? 'kanbanInProgressCount'
-                 : status === 'todo'        ? 'kanbanTodoCount'
-                 :                            'kanbanCompleteCount';
-    const bodyEl = document.getElementById(colId);
-    const cntEl  = document.getElementById(cntId);
-    if (bodyEl) bodyEl.innerHTML = tasks.map(t => kanbanCardHtml(t)).join('') || '<div class="kanban-empty">Drop tasks here</div>';
-    if (cntEl)  cntEl.textContent = tasks.length;
-  });
-}
-
-function kanbanCardHtml(t) {
-  const assignments = t.task_assignments || [];
-  const dClass    = deadlineClass(t.deadline);
-  const listName  = t.list_id ? (allTaskLists.find(l => l.id === t.list_id)?.name || '') : '';
-  const descHtml  = t.description && taskDensity === 'detailed'
-    ? `<div class="kanban-card-desc">${escHtml(t.description.slice(0, 80))}${t.description.length > 80 ? '\u2026' : ''}</div>` : '';
-  const avatars   = assignments.slice(0, 3).map(a =>
-    `<div class="task-chip-avatar" style="width:1.5rem;height:1.5rem;font-size:0.65rem;">${(a.assignee_name || a.assignee_email)[0].toUpperCase()}</div>`
-  ).join('');
-  const moreAv    = assignments.length > 3 ? `<span style="font-size:0.7rem;color:var(--text-muted);">+${assignments.length - 3}</span>` : '';
-
-  return `<div class="kanban-card ${dClass}" draggable="true" data-task-id="${t.id}"
-    ondragstart="kanbanDragId='${t.id}';event.dataTransfer.effectAllowed='move';"
-    ondragend="document.querySelectorAll('.kanban-col').forEach(c=>c.classList.remove('kanban-drag-over'))"
-    onclick="openTaskDetail('${t.id}')">
-    <div class="kanban-card-title">${escHtml(t.title)}${commentBadgeHtml(t)}</div>
-    ${descHtml}
-    <div class="kanban-card-meta">
-      ${listName ? `<span class="task-tag task-list-tag" style="font-size:0.7rem;">${escHtml(listName)}</span>` : ''}
-      ${t.deadline ? `<span class="task-deadline-pill ${dClass}" style="font-size:0.7rem;">${deadlineLabel(t.deadline, t.deadline_time)}</span>` : ''}
-    </div>
-    ${assignments.length ? `<div class="kanban-card-assignees">${avatars}${moreAv}</div>` : ''}
-  </div>`;
-}
-
-function kanbanDrop(event, status) {
-  event.preventDefault();
-  document.querySelectorAll('.kanban-col').forEach(c => c.classList.remove('kanban-drag-over'));
-  if (!kanbanDragId) return;
-  const task = allTasks.find(t => t.id === kanbanDragId);
-  if (!task || task.status === status) { kanbanDragId = null; return; }
-  task.status = status; // optimistic update
-  renderKanban();
-  updateTaskStatus(kanbanDragId, status);
-  kanbanDragId = null;
 }
 
 // ── Timeline / Gantt strip ─────────────────────────────────
@@ -1071,7 +1018,7 @@ function renderCalendar() {
 
     const dots = tasks.map(t => {
       const sc = STATUS_COLORS[t.status] || '';
-      return `<div class="cal-task-dot ${sc} ${deadlineClass(t.deadline)}" onclick="openTaskDetail('${t.id}')" title="${escHtml(t.title)}">${escHtml(t.title)}</div>`;
+      return `<div class="cal-task-dot ${sc} ${deadlineClass(t.deadline, t.deadline_time)}" onclick="openTaskDetail('${t.id}')" title="${escHtml(t.title)}">${escHtml(t.title)}</div>`;
     }).join('');
 
     let heatStyle = '';
@@ -1207,7 +1154,7 @@ const STATUS_COLORS = { todo: '', in_progress: 'status-inprogress', complete: 's
 
 function taskCardHtml(t, showListTag = false) {
   const assignments = t.task_assignments || [];
-  const dClass      = deadlineClass(t.deadline);
+  const dClass      = deadlineClass(t.deadline, t.deadline_time);
   const isDetailed  = taskDensity === 'detailed';
   const listName    = (showListTag || isDetailed) && t.list_id
     ? (allTaskLists.find(l => l.id === t.list_id)?.name || null)
@@ -1295,7 +1242,7 @@ async function openTaskDetail(taskId) {
   const meta = [];
   if (t.deadline) {
     const fullDate = safeDate(t.deadline).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
-    meta.push(`<span class="task-deadline-pill ${deadlineClass(t.deadline)}" title="${fullDate}">Due ${fullDate}</span>`);
+    meta.push(`<span class="task-deadline-pill ${deadlineClass(t.deadline, t.deadline_time)}" title="${fullDate}">Due ${fullDate}</span>`);
   }
   if (t.todo_lists?.name) meta.push(`<span class="task-tag">Folder: ${escHtml(t.todo_lists.name)}</span>`);
   document.getElementById('taskDetailMeta').innerHTML = meta.join('');
@@ -1657,9 +1604,10 @@ function renderListManagerRows() {
   }).join('');
 }
 
-function openDefaultAssigneePicker(listId) {
+async function openDefaultAssigneePicker(listId) {
   const list = allTaskLists.find(l => l.id === listId);
   if (!list) return;
+  if (!contactGroups.length) await ensureContactsLoaded();
   const alreadyEmails = new Set((list.default_assignees || []).map(a => a.email));
   const allContacts = (contactGroups || []).flatMap(g => g.members || []);
   const available = allContacts.filter(m => m.email && !alreadyEmails.has(m.email));
@@ -2022,6 +1970,31 @@ function bindUI() {
       }
     }
   });
+
+  // Silent comment polling — refresh tasks every 60s when no modal is open
+  setInterval(async () => {
+    const modals = ['taskDetailModal', 'newTaskModal', 'newListModal', 'pubTaskDetailModal', 'notesImportModal'];
+    const anyOpen = modals.some(id => {
+      const el = document.getElementById(id);
+      return el && !el.classList.contains('hidden');
+    });
+    if (anyOpen) return;
+    const tasksSection = document.getElementById('tasksSection');
+    if (!tasksSection || tasksSection.classList.contains('hidden')) return;
+    // Silently reload tasks + update badges without showing loading spinner
+    try {
+      const [tasksRes, listsRes] = await Promise.all([
+        fetch(`/api/tasks?adminCode=${encodeURIComponent(getAdminCode())}`),
+        fetch(`/api/task-lists?adminCode=${encodeURIComponent(getAdminCode())}`),
+      ]);
+      if (!tasksRes.ok || !listsRes.ok) return;
+      allTasks = await tasksRes.json();
+      allTaskLists = await listsRes.json();
+      updateOverdueBanner();
+      if (taskViewMode === 'list') applyTaskFilters();
+      else if (taskViewMode === 'calendar') renderCalendar();
+    } catch {}
+  }, 60000);
 }
 
 function closeCreateModal() {
@@ -3302,7 +3275,7 @@ function parseNotesText(text) {
     // @ALL broadcast — treat whole line as task, no specific assignee
     if (trimmed.startsWith('@')) {
       const title = trimmed.replace(/^@[^:]+:\s*/, '').trim() || trimmed;
-      tasks.push({ names: [], resolvedAssignees: [], title, notes: [], selected: true, list_id: null });
+      tasks.push({ names: [], resolvedAssignees: [], title, notes: [], selected: true, list_id: null, deadline: null, deadline_time: null });
       continue;
     }
 
@@ -3322,7 +3295,7 @@ function parseNotesText(text) {
       }
     }
 
-    tasks.push({ names, resolvedAssignees, unresolvedNames, title, notes: [], selected: true, list_id: null });
+    tasks.push({ names, resolvedAssignees, unresolvedNames, title, notes: [], selected: true, list_id: null, deadline: null, deadline_time: null });
   }
   return tasks;
 }
@@ -3365,7 +3338,7 @@ function importAction() {
   }
 }
 
-function _importParse() {
+async function _importParse() {
   const text = document.getElementById('importNotesInput').value.trim();
   if (!text) {
     document.getElementById('importParseError').textContent = 'Paste some notes first.';
@@ -3374,6 +3347,7 @@ function _importParse() {
   }
   hide('importParseError');
 
+  if (!contactGroups.length) await ensureContactsLoaded();
   importParsedTasks = parseNotesText(text);
   if (!importParsedTasks.length) {
     document.getElementById('importParseError').textContent = 'No tasks found. Check the format.';
@@ -3432,6 +3406,14 @@ function renderImportPreview() {
           <div class="import-task-title">${escHtml(t.title)}</div>
           ${assigneeHtml ? `<div style="margin-top:0.2rem;display:flex;gap:0.25rem;flex-wrap:wrap;">${assigneeHtml}</div>` : ''}
           ${notesHtml}
+          <div style="display:flex;gap:0.35rem;margin-top:0.35rem;flex-wrap:wrap;align-items:center;">
+            <input type="date" value="${t.deadline || ''}"
+              onchange="importParsedTasks[${i}].deadline=this.value||null"
+              style="font-size:0.72rem;padding:0.15rem 0.3rem;border:1px solid var(--border);border-radius:5px;font-family:inherit;" />
+            <input type="time" value="${t.deadline_time || ''}"
+              onchange="importParsedTasks[${i}].deadline_time=this.value||null"
+              style="font-size:0.72rem;padding:0.15rem 0.3rem;border:1px solid var(--border);border-radius:5px;font-family:inherit;" />
+          </div>
         </div>
         <select class="import-folder-sel" onchange="importParsedTasks[${i}].list_id=this.value||null"
           style="font-size:0.75rem;padding:0.2rem 0.4rem;border:1px solid var(--border);border-radius:6px;font-family:inherit;flex-shrink:0;max-width:130px;">
@@ -3481,6 +3463,8 @@ async function _importConfirm() {
         description,
         list_id: t.list_id || null,
         assignments: t.resolvedAssignees,
+        deadline: t.deadline || null,
+        deadline_time: t.deadline_time || null,
       }),
     });
     if (!res.ok) failed++;
