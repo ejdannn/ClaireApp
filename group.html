@@ -76,7 +76,8 @@
     <!-- Step 2: Availability grid -->
     <div class="step-panel" id="step2Panel">
 
-      <div class="avail-grid-wrapper">
+      <!-- ── Weekly mode grid ── -->
+      <div id="weeklyGridWrap" class="avail-grid-wrapper">
         <div class="avail-grid-header">
           <div>
             <h2><span class="icon-emoji">🗓</span> Your Weekly Availability</h2>
@@ -118,6 +119,48 @@
         <!-- Quick actions -->
         <div class="grid-quick-actions">
           <button class="btn btn-ghost btn-sm" id="clearAllBtn">Clear All</button>
+        </div>
+      </div>
+
+      <!-- ── Specific dates mode grid ── -->
+      <div id="specificDatesWrap" class="avail-grid-wrapper hidden">
+        <div class="avail-grid-header">
+          <div>
+            <h2><span class="icon-emoji">📅</span> Your Availability</h2>
+            <p class="text-muted text-sm" style="margin-top:0.2rem;">
+              Select the times you're free on each specific date below.
+            </p>
+          </div>
+          <div class="avail-legend">
+            <div class="legend-dot available"></div> Free
+            <div class="legend-dot unavailable" style="margin-left:0.5rem;"></div> Busy
+          </div>
+        </div>
+
+        <!-- Desktop hint -->
+        <p class="avail-hint grid-desktop">Click or click-and-drag to select your free times</p>
+        <!-- Mobile hint -->
+        <p class="avail-hint grid-mobile">Tap a date above, then tap your free time slots below</p>
+
+        <!-- ── Specific dates desktop grid ── -->
+        <div class="grid-desktop">
+          <div class="avail-grid" id="specificDesktopGrid">
+            <!-- Rendered by JS -->
+          </div>
+        </div>
+
+        <!-- ── Specific dates mobile grid ── -->
+        <div class="grid-mobile">
+          <div class="day-tabs" id="specificDateTabs">
+            <!-- Date tab buttons rendered by JS -->
+          </div>
+          <div class="mobile-slot-list" id="specificMobileSlotList">
+            <!-- Slots rendered by JS -->
+          </div>
+        </div>
+
+        <div class="grid-quick-actions">
+          <button class="btn btn-ghost btn-sm" id="specificClearAllBtn">Clear All</button>
         </div>
       </div>
 

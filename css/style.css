@@ -874,6 +874,20 @@ label {
 .avail-slot.on     { background: var(--primary); }
 .avail-slot.on:hover { background: var(--primary-dark); }
 
+/* Specific-dates grid shares the same slot styles */
+.spec-slot { user-select: none; }
+.spec-mobile-slot {
+  padding: 0.45rem 0.75rem;
+  border-radius: 6px;
+  background: var(--surface2);
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: background 0.1s;
+}
+.spec-mobile-slot:hover { background: var(--primary-light); }
+.spec-mobile-slot.on    { background: var(--primary); color: #fff; font-weight: 600; }
+.spec-mobile-slot.hour-slot { font-weight: 600; }
+
 /* Mobile day tabs */
 .grid-mobile { display: none; }
 .day-tabs {

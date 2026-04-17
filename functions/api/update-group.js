@@ -18,9 +18,9 @@ export async function onRequestOptions() {
 export async function onRequestPut(context) {
   const { request, env } = context;
 
-  let id, name, description, expectedMembers, adminCode;
+  let id, name, description, expectedMembers, adminCode, schedule_mode, date_window;
   try {
-    ({ id, name, description, expectedMembers, adminCode } = await request.json());
+    ({ id, name, description, expectedMembers, adminCode, schedule_mode, date_window } = await request.json());
   } catch {
     return new Response(JSON.stringify({ error: 'Invalid request body' }), { status: 400, headers: CORS });
   }
@@ -46,6 +46,8 @@ export async function onRequestPut(context) {
   if (name !== undefined)            patch.name            = name.trim();
   if (description !== undefined)     patch.description     = (description || '').trim();
   if (expectedMembers !== undefined) patch.expected_members = Array.isArray(expectedMembers) ? expectedMembers : [];
+  if (schedule_mode !== undefined)   patch.schedule_mode   = schedule_mode;
+  if (date_window !== undefined)     patch.date_window     = Array.isArray(date_window) ? date_window : [];
 
   const res = await fetch(`${supabaseUrl}/rest/v1/groups?id=eq.${id}`, {
     method: 'PATCH',

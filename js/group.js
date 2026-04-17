@@ -4,9 +4,15 @@
 
 let db, groupData, existingMember;
 
-// availability[day] = Set of available slot indices
+// availability[day] = Set of available slot indices (weekly mode)
 const availability = {};
 for (let d = 0; d < 7; d++) availability[d] = new Set();
+
+// specificAvail["2026-04-20"] = Set of available slot indices (specific dates mode)
+const specificAvail = {};
+let scheduleMode = 'weekly';      // 'weekly' | 'specific_dates'
+let specificDates = [];           // sorted ISO date strings from groupData.date_window
+let activeMobileDate = null;      // currently selected date in mobile specific-dates view
 
 let activeMobileDay = 0;
 let isDragging = false;
@@ -53,14 +59,25 @@ async function loadGroup(slug) {
   if (error || !data) { showNotFound(); return; }
 
   groupData = data;
+  scheduleMode = data.schedule_mode || 'weekly';
+  specificDates = [...(data.date_window || [])].sort();
+
   document.getElementById('groupNameDisplay').textContent = data.name;
-  document.getElementById('groupDescDisplay').textContent = data.description || 'Fill in your general weekly availability below.';
+  document.getElementById('groupDescDisplay').textContent = data.description ||
+    (scheduleMode === 'specific_dates' ? 'Select your availability for the specific dates below.' : 'Fill in your general weekly availability below.');
   document.title = `${data.name} : Claire`;
   show('groupHeaderContent');
   document.getElementById('groupBody').style.display = '';
 
-  buildDesktopGrid();
-  buildMobileGrid();
+  if (scheduleMode === 'specific_dates') {
+    // Show specific dates grid, hide weekly
+    document.getElementById('weeklyGridWrap').classList.add('hidden');
+    document.getElementById('specificDatesWrap').classList.remove('hidden');
+    buildSpecificDatesGrid();
+  } else {
+    buildDesktopGrid();
+    buildMobileGrid();
+  }
 }
 
 // ── Step 1: Name + email ──────────────────────────────────
@@ -154,16 +171,24 @@ async function checkExistingMember() {
 // Loads an availability object into the grid (used for both returning + pre-fill)
 function applyAvailability(avail) {
   const a = avail || {};
-  for (let d = 0; d < 7; d++) {
-    availability[d] = new Set(a[d] || []);
-  }
   if (a.tz) {
     const tzSel = document.getElementById('memberTimezone');
     if (tzSel) tzSel.value = a.tz;
   }
-  refreshDesktopGrid();
-  refreshMobileSlots();
-  animateSlotPopIn();
+  if (scheduleMode === 'specific_dates') {
+    for (const iso of specificDates) {
+      specificAvail[iso] = new Set(a[iso] || []);
+    }
+    refreshSpecificDesktopGrid();
+    refreshSpecificMobileSlots();
+  } else {
+    for (let d = 0; d < 7; d++) {
+      availability[d] = new Set(a[d] || []);
+    }
+    refreshDesktopGrid();
+    refreshMobileSlots();
+    animateSlotPopIn();
+  }
 }
 
 function animateSlotPopIn() {
@@ -185,8 +210,13 @@ function goToStep2() {
   document.getElementById('step1Dot').textContent = '✓';
   document.getElementById('stepLine1').classList.add('done');
   document.getElementById('step2Dot').classList.add('active');
-  refreshDesktopGrid();
-  refreshMobileSlots();
+  if (scheduleMode === 'specific_dates') {
+    refreshSpecificDesktopGrid();
+    refreshSpecificMobileSlots();
+  } else {
+    refreshDesktopGrid();
+    refreshMobileSlots();
+  }
   window.scrollTo(0, 0);
 }
 
@@ -423,6 +453,153 @@ document.getElementById('clearAllBtn').addEventListener('click', () => {
   refreshDesktopGrid(); refreshMobileSlots();
 });
 
+document.getElementById('specificClearAllBtn').addEventListener('click', () => {
+  for (const iso of specificDates) specificAvail[iso] = new Set();
+  refreshSpecificDesktopGrid(); refreshSpecificMobileSlots();
+});
+
+// ── Specific Dates Grid ───────────────────────────────────
+function buildSpecificDatesGrid() {
+  // Init state
+  for (const iso of specificDates) {
+    if (!specificAvail[iso]) specificAvail[iso] = new Set();
+  }
+  activeMobileDate = specificDates[0] || null;
+  _buildSpecificDesktopGrid();
+  _buildSpecificMobileTabs();
+  _buildSpecificMobileSlots();
+}
+
+function _buildSpecificDesktopGrid() {
+  const grid = document.getElementById('specificDesktopGrid');
+  if (!grid) return;
+
+  if (!specificDates.length) {
+    grid.innerHTML = '<p class="text-muted" style="padding:1rem;grid-column:1/-1;">No specific dates have been set for this group.</p>';
+    return;
+  }
+
+  // Set grid columns: time label + one per date
+  grid.style.gridTemplateColumns = `3.5rem repeat(${specificDates.length}, 1fr)`;
+
+  let html = '<div></div>'; // corner
+  for (const iso of specificDates) {
+    const d = new Date(iso + 'T00:00:00');
+    const label = d.toLocaleDateString('default', { weekday: 'short', month: 'short', day: 'numeric' });
+    html += `<div class="avail-grid-day-label" style="font-size:0.72rem;white-space:normal;text-align:center;line-height:1.3;">${label}</div>`;
+  }
+
+  for (let s = 0; s < TOTAL_SLOTS; s++) {
+    const time   = slotToTime(s);
+    const isHour = s % 2 === 0;
+    html += `<div class="avail-grid-time ${isHour ? 'hour' : ''}">${isHour ? time : ''}</div>`;
+    for (const iso of specificDates) {
+      html += `<div class="avail-slot spec-slot" data-iso="${iso}" data-slot="${s}"></div>`;
+    }
+  }
+
+  grid.innerHTML = html;
+
+  // Drag-select (same logic as weekly grid)
+  let isDraggingSpec = false, dragActionSpec = 'add';
+  grid.addEventListener('mousedown', e => {
+    const cell = e.target.closest('.spec-slot');
+    if (!cell) return;
+    isDraggingSpec = true;
+    const iso = cell.dataset.iso, s = +cell.dataset.slot;
+    dragActionSpec = specificAvail[iso]?.has(s) ? 'remove' : 'add';
+    _toggleSpecSlot(iso, s, dragActionSpec);
+  });
+  grid.addEventListener('mouseover', e => {
+    if (!isDraggingSpec) return;
+    const cell = e.target.closest('.spec-slot');
+    if (!cell) return;
+    _toggleSpecSlot(cell.dataset.iso, +cell.dataset.slot, dragActionSpec);
+  });
+  document.addEventListener('mouseup', () => { isDraggingSpec = false; }, { passive: true });
+
+  refreshSpecificDesktopGrid();
+}
+
+function _buildSpecificMobileTabs() {
+  const tabs = document.getElementById('specificDateTabs');
+  if (!tabs) return;
+  tabs.innerHTML = specificDates.map(iso => {
+    const d = new Date(iso + 'T00:00:00');
+    const wd  = d.toLocaleDateString('default', { weekday: 'short' });
+    const day = d.getDate();
+    const mo  = d.toLocaleDateString('default', { month: 'short' });
+    return `<button class="day-tab" data-iso="${iso}">
+      <span class="day-tab-name">${wd}</span>
+      <span class="day-tab-num">${day}</span>
+      <span class="day-tab-name" style="font-size:0.65rem;">${mo}</span>
+    </button>`;
+  }).join('');
+  tabs.querySelectorAll('.day-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      activeMobileDate = btn.dataset.iso;
+      _highlightSpecMobileTab();
+      refreshSpecificMobileSlots();
+    });
+  });
+  _highlightSpecMobileTab();
+}
+
+function _highlightSpecMobileTab() {
+  document.querySelectorAll('#specificDateTabs .day-tab').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.iso === activeMobileDate);
+  });
+}
+
+function _buildSpecificMobileSlots() {
+  // Initial render
+  refreshSpecificMobileSlots();
+}
+
+function refreshSpecificMobileSlots() {
+  const list = document.getElementById('specificMobileSlotList');
+  if (!list) return;
+  if (!activeMobileDate) { list.innerHTML = ''; return; }
+  const avail = specificAvail[activeMobileDate] || new Set();
+  list.innerHTML = Array.from({ length: TOTAL_SLOTS }, (_, s) => {
+    const time = slotToTime(s);
+    const isHour = s % 2 === 0;
+    return `<div class="mobile-slot spec-mobile-slot ${avail.has(s) ? 'on' : ''} ${isHour ? 'hour-slot' : ''}"
+      data-slot="${s}" onclick="specMobileToggle(${s})">${time}</div>`;
+  }).join('');
+}
+
+function specMobileToggle(s) {
+  if (!activeMobileDate) return;
+  const avail = specificAvail[activeMobileDate];
+  if (avail.has(s)) avail.delete(s); else avail.add(s);
+  // Update mobile cell
+  const cell = document.querySelector(`#specificMobileSlotList .spec-mobile-slot[data-slot="${s}"]`);
+  if (cell) cell.classList.toggle('on', avail.has(s));
+  // Update desktop cell too
+  const dCell = document.querySelector(`#specificDesktopGrid .spec-slot[data-iso="${activeMobileDate}"][data-slot="${s}"]`);
+  if (dCell) dCell.classList.toggle('on', avail.has(s));
+}
+
+function _toggleSpecSlot(iso, s, action) {
+  if (!specificAvail[iso]) specificAvail[iso] = new Set();
+  if (action === 'add') specificAvail[iso].add(s);
+  else                  specificAvail[iso].delete(s);
+  const cell = document.querySelector(`#specificDesktopGrid .spec-slot[data-iso="${iso}"][data-slot="${s}"]`);
+  if (cell) cell.classList.toggle('on', action === 'add');
+  if (iso === activeMobileDate) {
+    const mCell = document.querySelector(`#specificMobileSlotList .spec-mobile-slot[data-slot="${s}"]`);
+    if (mCell) mCell.classList.toggle('on', action === 'add');
+  }
+}
+
+function refreshSpecificDesktopGrid() {
+  document.querySelectorAll('#specificDesktopGrid .spec-slot').forEach(cell => {
+    const iso = cell.dataset.iso, s = +cell.dataset.slot;
+    cell.classList.toggle('on', specificAvail[iso]?.has(s) || false);
+  });
+}
+
 
 // ── Submit ────────────────────────────────────────────────
 document.getElementById('submitBtn').addEventListener('click', submitAvailability);
@@ -433,10 +610,16 @@ async function submitAvailability() {
   const errEl = document.getElementById('submitError');
   errEl.classList.add('hidden');
 
-  // Serialize availability
+  // Serialize availability (mode-aware)
   const avail = {};
-  for (let d = 0; d < 7; d++) {
-    avail[d] = [...availability[d]].sort((a, b) => a - b);
+  if (scheduleMode === 'specific_dates') {
+    for (const iso of specificDates) {
+      avail[iso] = [...(specificAvail[iso] || new Set())].sort((a, b) => a - b);
+    }
+  } else {
+    for (let d = 0; d < 7; d++) {
+      avail[d] = [...availability[d]].sort((a, b) => a - b);
+    }
   }
   // Store member's timezone so admin can convert correctly
   avail.tz = document.getElementById('memberTimezone')?.value || getBrowserTimezone();
@@ -469,7 +652,7 @@ async function submitAvailability() {
 
 function pulseSavedCells() {
   return new Promise(resolve => {
-    const cells = document.querySelectorAll('.avail-slot.on, .mobile-slot.on');
+    const cells = document.querySelectorAll('.avail-slot.on, .mobile-slot.on, .spec-slot.on');
     cells.forEach(el => el.classList.add('slot-saved-pulse'));
     // Remove class after animation and resolve
     setTimeout(() => {

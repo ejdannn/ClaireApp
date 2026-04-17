@@ -16,9 +16,9 @@ export async function onRequestOptions() {
 export async function onRequestPost(context) {
   const { request, env } = context;
 
-  let name, description, adminCode, expectedMembers, customSlug;
+  let name, description, adminCode, expectedMembers, customSlug, schedule_mode, date_window;
   try {
-    ({ name, description, adminCode, expectedMembers, customSlug } = await request.json());
+    ({ name, description, adminCode, expectedMembers, customSlug, schedule_mode, date_window } = await request.json());
   } catch {
     return new Response(JSON.stringify({ error: 'Invalid request body' }), { status: 400, headers: CORS });
   }
@@ -94,6 +94,8 @@ export async function onRequestPost(context) {
       description: (description || '').trim(),
       slug,
       expected_members: Array.isArray(expectedMembers) ? expectedMembers : [],
+      schedule_mode: schedule_mode || 'weekly',
+      date_window: Array.isArray(date_window) ? date_window : [],
     }),
   });
 

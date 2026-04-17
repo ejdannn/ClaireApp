@@ -66,8 +66,133 @@ function getMembersInAdminTz() {
   return groupMembers.map(m => {
     const memberTz = m.availability?.tz;
     if (!memberTz || memberTz === adminTz) return m;
+    // convertAvailability works on {key: [slots]} regardless of key type (day index or date string)
     return { ...m, availability: convertAvailability(m.availability, memberTz, adminTz) };
   });
+}
+
+// ── Specific-dates scheduling mode ───────────────────────
+let createGroupMode  = 'weekly';
+let createGroupDates = [];   // ISO date strings for create modal
+let editGroupMode    = 'weekly';
+let editGroupDates   = [];   // ISO date strings for edit modal
+
+function createSetMode(mode) {
+  createGroupMode = mode;
+  document.getElementById('createModeWeeklyBtn').classList.toggle('active', mode === 'weekly');
+  document.getElementById('createModeSpecificBtn').classList.toggle('active', mode === 'specific_dates');
+  const wrap = document.getElementById('createDatePickerWrap');
+  if (mode === 'specific_dates') {
+    wrap.classList.remove('hidden');
+    _renderAdminDatePicker('createDatePickerWrap', createGroupDates, d => { createGroupDates = d; });
+  } else {
+    wrap.classList.add('hidden');
+  }
+}
+
+function editSetMode(mode) {
+  editGroupMode = mode;
+  document.getElementById('editModeWeeklyBtn').classList.toggle('active', mode === 'weekly');
+  document.getElementById('editModeSpecificBtn').classList.toggle('active', mode === 'specific_dates');
+  const wrap = document.getElementById('editDatePickerWrap');
+  if (mode === 'specific_dates') {
+    wrap.classList.remove('hidden');
+    _renderAdminDatePicker('editDatePickerWrap', editGroupDates, d => { editGroupDates = d; });
+  } else {
+    wrap.classList.add('hidden');
+  }
+}
+
+// Admin calendar date-multi-picker
+// wrapperId: id of container div; selectedDates: mutable array of ISO strings; onChange(dates) callback
+function _renderAdminDatePicker(wrapperId, selectedDates, onChange) {
+  const wrap = document.getElementById(wrapperId);
+  if (!wrap) return;
+  const now = new Date();
+  // Store nav state on the element
+  if (!wrap._pickerYear)  wrap._pickerYear  = now.getFullYear();
+  if (!wrap._pickerMonth) wrap._pickerMonth = now.getMonth();
+
+  const render = () => {
+    const yr = wrap._pickerYear, mo = wrap._pickerMonth;
+    const monthName = new Date(yr, mo, 1).toLocaleString('default', { month: 'long', year: 'numeric' });
+    const firstDay  = new Date(yr, mo, 1).getDay(); // 0=Sun
+    const daysInMo  = new Date(yr, mo + 1, 0).getDate();
+
+    // Header row (Mon-first: Mon=0 … Sun=6)
+    const dayHeaders = ['Mo','Tu','We','Th','Fr','Sa','Su']
+      .map(d => `<div style="text-align:center;font-size:0.72rem;font-weight:700;color:var(--text-muted);padding:0.2rem 0;">${d}</div>`)
+      .join('');
+
+    // Offset: convert Sun=0 to Mon-first offset
+    const offset = (firstDay + 6) % 7;
+    const blanks  = Array(offset).fill('<div></div>').join('');
+
+    const dayCells = Array.from({ length: daysInMo }, (_, i) => {
+      const day   = i + 1;
+      const iso   = `${yr}-${String(mo + 1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+      const sel   = selectedDates.includes(iso);
+      return `<div onclick="_adminPickerToggle('${wrapperId}','${iso}')"
+        style="text-align:center;padding:0.3rem 0;border-radius:50%;cursor:pointer;font-size:0.85rem;
+          ${sel ? 'background:var(--primary);color:#fff;font-weight:700;' : 'color:var(--text);'}
+          transition:background 0.12s;"
+        onmouseenter="this.style.opacity='0.8'"
+        onmouseleave="this.style.opacity='1'">${day}</div>`;
+    }).join('');
+
+    // Selected date pills
+    const sorted = [...selectedDates].sort();
+    const pills  = sorted.map(iso => {
+      const d = new Date(iso + 'T00:00:00');
+      const label = d.toLocaleDateString('default', { month: 'short', day: 'numeric' });
+      return `<span style="display:inline-flex;align-items:center;gap:0.25rem;background:var(--primary-pale);color:var(--primary-deeper);
+        border-radius:99px;padding:0.15rem 0.5rem;font-size:0.75rem;font-weight:600;">
+        ${label}
+        <span onclick="_adminPickerToggle('${wrapperId}','${iso}')" style="cursor:pointer;font-size:0.8rem;line-height:1;">✕</span>
+      </span>`;
+    }).join('');
+
+    wrap.innerHTML = `
+      <div style="border:1.5px solid var(--border);border-radius:10px;padding:0.75rem;background:var(--surface);">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;">
+          <button type="button" class="btn btn-ghost btn-sm" style="padding:0.2rem 0.5rem;"
+            onclick="_adminPickerNav('${wrapperId}',-1)">‹</button>
+          <span style="font-size:0.85rem;font-weight:700;">${monthName}</span>
+          <button type="button" class="btn btn-ghost btn-sm" style="padding:0.2rem 0.5rem;"
+            onclick="_adminPickerNav('${wrapperId}',1)">›</button>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:0.15rem;">
+          ${dayHeaders}${blanks}${dayCells}
+        </div>
+        ${pills ? `<div style="display:flex;flex-wrap:wrap;gap:0.3rem;margin-top:0.6rem;">${pills}</div>` : ''}
+        ${!selectedDates.length ? '<p class="text-muted" style="font-size:0.75rem;margin-top:0.4rem;">Click dates to select them.</p>' : ''}
+      </div>`;
+    // stash callback so toggle/nav can call it
+    wrap._onChange = onChange;
+    wrap._selectedDates = selectedDates;
+  };
+  render();
+  wrap._pickerRender = render;
+}
+
+function _adminPickerNav(wrapperId, delta) {
+  const wrap = document.getElementById(wrapperId);
+  if (!wrap) return;
+  wrap._pickerMonth += delta;
+  if (wrap._pickerMonth > 11) { wrap._pickerMonth = 0; wrap._pickerYear++; }
+  if (wrap._pickerMonth < 0)  { wrap._pickerMonth = 11; wrap._pickerYear--; }
+  wrap._pickerRender?.();
+}
+
+function _adminPickerToggle(wrapperId, iso) {
+  const wrap = document.getElementById(wrapperId);
+  if (!wrap) return;
+  const dates = wrap._selectedDates;
+  const idx   = dates.indexOf(iso);
+  if (idx >= 0) dates.splice(idx, 1);
+  else          dates.push(iso);
+  wrap._onChange?.(dates);
+  wrap._pickerRender?.();
 }
 
 // ── Init ─────────────────────────────────────────────────
@@ -479,6 +604,24 @@ function renderHeatmap() {
   if (!groupMembers.length) { grid.innerHTML = ''; show('heatmapEmpty'); return; }
   hide('heatmapEmpty');
 
+  const isSpecific = currentGroup?.schedule_mode === 'specific_dates';
+
+  if (isSpecific) {
+    _renderSpecificDatesHeatmap(grid);
+  } else {
+    _renderWeeklyHeatmap(grid);
+  }
+
+  // Legend (same for both modes)
+  document.getElementById('heatmapLegend').innerHTML = `
+    <div class="heatmap-legend-swatch" style="background:#F3F4F6"></div> None &nbsp;
+    <div class="heatmap-legend-swatch" style="background:#FCD34D"></div> Some &nbsp;
+    <div class="heatmap-legend-swatch" style="background:#F59E0B"></div> Most &nbsp;
+    <div class="heatmap-legend-swatch" style="background:#22C55E"></div> All available`;
+}
+
+function _renderWeeklyHeatmap(grid) {
+  grid.style.gridTemplateColumns = ''; // reset any specific-dates override
   const tzMembers = getMembersInAdminTz();
   const total  = tzMembers.length;
   const matrix = Array.from({ length: 7 }, () => new Array(TOTAL_SLOTS).fill(0));
@@ -507,20 +650,67 @@ function renderHeatmap() {
 
   grid.innerHTML = html;
 
-  // Fade in columns left to right
   grid.querySelectorAll('.heatmap-cell').forEach(el => {
     const day = +el.dataset.day;
     el.style.animationDelay = `${day * 55}ms`;
     el.classList.add('heatmap-col-fadein');
     el.addEventListener('animationend', () => el.classList.remove('heatmap-col-fadein'), { once: true });
   });
+}
 
-  // Legend
-  document.getElementById('heatmapLegend').innerHTML = `
-    <div class="heatmap-legend-swatch" style="background:#F3F4F6"></div> None &nbsp;
-    <div class="heatmap-legend-swatch" style="background:#FCD34D"></div> Some &nbsp;
-    <div class="heatmap-legend-swatch" style="background:#F59E0B"></div> Most &nbsp;
-    <div class="heatmap-legend-swatch" style="background:#22C55E"></div> All available`;
+function _renderSpecificDatesHeatmap(grid) {
+  const dates = [...(currentGroup.date_window || [])].sort();
+  if (!dates.length) {
+    grid.innerHTML = '<p class="text-muted" style="padding:1rem;grid-column:1/-1;">No specific dates configured. Edit the schedule to add dates.</p>';
+    return;
+  }
+
+  const tzMembers = getMembersInAdminTz();
+  const total = tzMembers.length;
+
+  // Build matrix: matrix[dateIndex][slot]
+  const matrix = dates.map(() => new Array(TOTAL_SLOTS).fill(0));
+  for (const m of tzMembers) {
+    const avail = m.availability || {};
+    dates.forEach((iso, di) => {
+      for (const s of (avail[iso] || [])) { if (s < TOTAL_SLOTS) matrix[di][s]++; }
+    });
+  }
+
+  // Override grid columns for N dates
+  grid.style.gridTemplateColumns = `3.5rem repeat(${dates.length}, 1fr)`;
+
+  const dateHeaders = dates.map((iso, di) => {
+    const d = new Date(iso + 'T00:00:00');
+    const label = d.toLocaleDateString('default', { weekday: 'short', month: 'short', day: 'numeric' });
+    return `<div class="heatmap-day-label" style="font-size:0.68rem;white-space:normal;text-align:center;line-height:1.2;">${label}</div>`;
+  }).join('');
+
+  let html = '<div></div>' + dateHeaders;
+
+  for (let s = 0; s < TOTAL_SLOTS; s++) {
+    const label = s % 2 === 0 ? slotToTime(s) : '';
+    html += `<div class="heatmap-time-label">${label}</div>`;
+    dates.forEach((iso, di) => {
+      const count = matrix[di][s];
+      const intensity = count / total;
+      const bg = heatColor(intensity);
+      const d = new Date(iso + 'T00:00:00');
+      const dateLabel = d.toLocaleDateString('default', { weekday: 'short', month: 'short', day: 'numeric' });
+      const tip = `${dateLabel} ${slotToTime(s)}: ${count}/${total} available`;
+      html += `<div class="heatmap-cell" style="background:${bg}" title="${tip}"
+        data-dateiso="${iso}" data-slot="${s}" onclick="showSlotDetailDate('${iso}',${s})"></div>`;
+    });
+  }
+
+  grid.innerHTML = html;
+
+  grid.querySelectorAll('.heatmap-cell').forEach((el, i) => {
+    const col = i % dates.length;
+    el.style.animationDelay = `${col * 55}ms`;
+    el.classList.add('heatmap-col-fadein');
+    el.addEventListener('animationend', () => el.classList.remove('heatmap-col-fadein'), { once: true });
+  });
 }
 
 // ── Slot detail popup ─────────────────────────────────────
@@ -559,10 +749,47 @@ function showSlotDetail(day, slot) {
     </div>`;
 
   document.getElementById('slotDetailModal').classList.remove('hidden');
+  document.getElementById('scheduleFromSlotBtn').style.display = '';
 }
 
 function closeSlotDetail() {
   document.getElementById('slotDetailModal').classList.add('hidden');
+}
+
+// Slot detail for specific-dates mode
+function showSlotDetailDate(iso, slot) {
+  const tzMembers = getMembersInAdminTz();
+  const available   = tzMembers.filter(m => (m.availability?.[iso] || []).includes(slot));
+  const unavailable = tzMembers.filter(m => !(m.availability?.[iso] || []).includes(slot));
+  const adminTz     = getAdminTimezone();
+  const tzLabel     = adminTz.split('/').pop().replace(/_/g, ' ');
+  const d = new Date(iso + 'T00:00:00');
+  const dateLabel = d.toLocaleDateString('default', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+
+  document.getElementById('slotDetailTitle').textContent = `${dateLabel} at ${slotToTime(slot)}`;
+
+  document.getElementById('slotDetailContent').innerHTML = `
+    <p class="text-muted" style="font-size:0.8rem;margin-bottom:1rem;">Times shown in ${tzLabel}</p>
+    <div style="margin-bottom:1rem;">
+      <div style="font-weight:600;color:var(--success);margin-bottom:0.4rem;">
+        <span class="icon-emoji">✅</span> Free (${available.length})
+      </div>
+      ${available.length
+        ? available.map(m => `<div class="slot-detail-name">${escHtml(m.name)}</div>`).join('')
+        : '<p class="text-muted" style="font-size:0.85rem;">Nobody is free</p>'}
+    </div>
+    <div>
+      <div style="font-weight:600;color:var(--danger);margin-bottom:0.4rem;">
+        <span class="icon-emoji">❌</span> Busy (${unavailable.length})
+      </div>
+      ${unavailable.length
+        ? unavailable.map(m => `<div class="slot-detail-name">${escHtml(m.name)}</div>`).join('')
+        : '<p class="text-muted" style="font-size:0.85rem;">Nobody is busy</p>'}
+    </div>`;
+
+  document.getElementById('slotDetailModal').classList.remove('hidden');
+  // Hide "schedule from this slot" for specific dates (no recurring meeting logic)
+  document.getElementById('scheduleFromSlotBtn').style.display = 'none';
 }
 
 document.getElementById('closeSlotDetailModal').addEventListener('click', closeSlotDetail);
@@ -580,6 +807,12 @@ function renderRecommended() {
 
   if (!groupMembers.length) { container.innerHTML = ''; show('recEmpty'); return; }
 
+  // Specific dates mode: show best slots per date instead of recurring recommendations
+  if (currentGroup?.schedule_mode === 'specific_dates') {
+    _renderSpecificDatesRecommended(container, empty);
+    return;
+  }
+
   const recs = getRecommendedTimes(getMembersInAdminTz());
   if (!recs.length) { container.innerHTML = ''; show('recEmpty'); return; }
   hide('recEmpty');
@@ -593,6 +826,52 @@ function renderRecommended() {
       </div>
       <button class="btn btn-sm btn-secondary" style="margin-top:0.6rem;width:100%;"
         onclick='prefillSchedule(${JSON.stringify(r)})'>Schedule This →</button>
+    </div>`).join('');
+}
+
+function _renderSpecificDatesRecommended(container, empty) {
+  const dates = [...(currentGroup.date_window || [])].sort();
+  if (!dates.length) { container.innerHTML = ''; show('recEmpty'); return; }
+
+  const tzMembers = getMembersInAdminTz();
+  const total = tzMembers.length;
+
+  // For each date, find the best slot block (longest run with most people free)
+  const recs = [];
+  for (const iso of dates) {
+    // Count availability per slot
+    const counts = new Array(TOTAL_SLOTS).fill(0);
+    for (const m of tzMembers) {
+      for (const s of (m.availability?.[iso] || [])) { if (s < TOTAL_SLOTS) counts[s]++; }
+    }
+    // Find best contiguous block (2+ slots = 1 hr min) with max attendees
+    let best = null;
+    for (let s = 0; s < TOTAL_SLOTS - 1; s++) {
+      if (counts[s] === 0) continue;
+      let end = s;
+      while (end + 1 < TOTAL_SLOTS && counts[end + 1] === counts[s]) end++;
+      const score = counts[s] * (end - s + 1);
+      if (!best || score > best.score) {
+        best = { startSlot: s, endSlot: end, count: counts[s], score };
+      }
+      s = end;
+    }
+    if (best && best.count > 0) {
+      const d = new Date(iso + 'T00:00:00');
+      recs.push({ iso, dateLabel: d.toLocaleDateString('default', { weekday: 'short', month: 'short', day: 'numeric' }), ...best, total, allAvailable: best.count === total });
+    }
+  }
+
+  if (!recs.length) { container.innerHTML = ''; show('recEmpty'); return; }
+  hide('recEmpty');
+
+  container.innerHTML = recs.map(r => `
+    <div class="rec-time-card ${r.allAvailable ? 'all-available' : ''}">
+      <div class="rec-time-day">${r.dateLabel}</div>
+      <div class="rec-time-range">${slotRangeLabel(r.startSlot, r.endSlot)}</div>
+      <div class="rec-time-count ${r.allAvailable ? 'full' : 'partial'}">
+        ${r.allAvailable ? '🎉 Everyone free!' : `${r.count} / ${r.total} available (${Math.round(r.count/r.total*100)}%)`}
+      </div>
     </div>`).join('');
 }
 
@@ -2053,6 +2332,10 @@ function closeCreateModal() {
   document.getElementById('newGroupExpected').value = '';
   document.getElementById('newGroupSlug').value = '';
   document.getElementById('createGroupError').classList.add('hidden');
+  // Reset specific-dates state
+  createGroupMode  = 'weekly';
+  createGroupDates = [];
+  createSetMode('weekly');
 }
 
 async function createGroup() {
@@ -2078,7 +2361,7 @@ async function createGroup() {
     const res = await fetch('/api/create-group', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, description: desc, expectedMembers: expected, customSlug: customSlug || undefined, adminCode: getAdminCode() }),
+      body: JSON.stringify({ name, description: desc, expectedMembers: expected, customSlug: customSlug || undefined, adminCode: getAdminCode(), schedule_mode: createGroupMode, date_window: createGroupDates }),
     });
     const data = await res.json();
 
@@ -3074,6 +3357,10 @@ function openEditScheduleModal(group) {
   // Reset picker collapse state
   const details = document.getElementById('editAddFromContactsDetails');
   if (details) details.open = false;
+  // Populate scheduling mode
+  editGroupMode  = currentGroup.schedule_mode || 'weekly';
+  editGroupDates = Array.isArray(currentGroup.date_window) ? [...currentGroup.date_window] : [];
+  editSetMode(editGroupMode);
   loadContactsForEditPicker();
   document.getElementById('editScheduleModal').classList.remove('hidden');
   document.getElementById('editScheduleName').focus();
@@ -3169,13 +3456,15 @@ async function saveScheduleEdits() {
         description,
         expectedMembers: expected,
         adminCode: getAdminCode(),
+        schedule_mode: editGroupMode,
+        date_window: editGroupDates,
       }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Failed to save changes.');
 
     // Update local state
-    currentGroup = { ...currentGroup, name, description, expected_members: expected };
+    currentGroup = { ...currentGroup, name, description, expected_members: expected, schedule_mode: editGroupMode, date_window: editGroupDates };
     closeEditScheduleModal();
     showToast('Schedule updated!', 'success');
     // If we're in detail view, update header + pending section
