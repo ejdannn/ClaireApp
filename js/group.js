@@ -161,8 +161,31 @@ async function checkExistingMember() {
     if (!document.getElementById('memberName').value) {
       document.getElementById('memberName').value = crossMatch.name;
     }
-    applyAvailability(crossMatch.availability);
-    show('prefillNotice');
+
+    if (scheduleMode === 'specific_dates') {
+      // For specific-dates groups, only carry over dates that match this group's date window
+      const crossAvail = crossMatch.availability || {};
+      const matchedDates = specificDates.filter(iso => crossAvail[iso] && crossAvail[iso].length > 0);
+
+      if (matchedDates.length > 0) {
+        applyAvailability(crossAvail);
+        const dateLabels = matchedDates.map(iso => {
+          const d = new Date(iso + 'T00:00:00');
+          return d.toLocaleDateString('default', { month: 'short', day: 'numeric' });
+        }).join(', ');
+        const noticeEl = document.getElementById('prefillNotice');
+        noticeEl.innerHTML = `<span class="icon-emoji">✨</span> We found your availability for <strong>${dateLabels}</strong> from a previous group and pre-filled it. Update anything that's changed, then hit Save.`;
+        show('prefillNotice');
+      } else {
+        hide('prefillNotice');
+      }
+    } else {
+      // Weekly mode — reset to generic message in case it was customised last run
+      const noticeEl = document.getElementById('prefillNotice');
+      noticeEl.innerHTML = `<span class="icon-emoji">✨</span> Looks like you've used Claire's Scheduling before. We pre-filled your availability from your last group as a starting point. Just update anything that has changed, then hit Save.`;
+      applyAvailability(crossMatch.availability);
+      show('prefillNotice');
+    }
   } else {
     hide('prefillNotice');
   }
