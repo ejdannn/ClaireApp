@@ -483,11 +483,14 @@ function _buildSpecificDesktopGrid() {
   grid.style.gridTemplateColumns = `3.5rem repeat(${specificDates.length}, 1fr)`;
 
   let html = '<div></div>'; // corner
-  for (const iso of specificDates) {
+  specificDates.forEach((iso, di) => {
     const d = new Date(iso + 'T00:00:00');
     const label = d.toLocaleDateString('default', { weekday: 'short', month: 'short', day: 'numeric' });
-    html += `<div class="avail-grid-day-label" style="font-size:0.72rem;white-space:normal;text-align:center;line-height:1.3;">${label}</div>`;
-  }
+    html += `<div class="avail-grid-day-label" style="font-size:0.72rem;white-space:normal;text-align:center;line-height:1.3;">
+      ${label}
+      <button class="copy-day-btn spec-copy-btn" data-di="${di}" title="Copy from another date" tabindex="-1">⊕</button>
+    </div>`;
+  });
 
   for (let s = 0; s < TOTAL_SLOTS; s++) {
     const time   = slotToTime(s);
@@ -518,7 +521,55 @@ function _buildSpecificDesktopGrid() {
   });
   document.addEventListener('mouseup', () => { isDraggingSpec = false; }, { passive: true });
 
+  // Copy-from-date buttons
+  grid.querySelectorAll('.spec-copy-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      openSpecCopyPopover(btn, +btn.dataset.di);
+    });
+  });
+
   refreshSpecificDesktopGrid();
+}
+
+function openSpecCopyPopover(anchorBtn, targetDi) {
+  closeCopyPopover(); // reuse same closer
+  const targetIso = specificDates[targetDi];
+
+  const popover = document.createElement('div');
+  popover.className = 'copy-day-popover';
+  const otherDates = specificDates.filter((_, i) => i !== targetDi);
+  if (!otherDates.length) { return; }
+  popover.innerHTML = `
+    <div class="copy-day-popover-label">Copy from:</div>
+    <div class="copy-day-popover-days">
+      ${otherDates.map(iso => {
+        const d = new Date(iso + 'T00:00:00');
+        const label = d.toLocaleDateString('default', { month: 'short', day: 'numeric' });
+        return `<button class="copy-day-option" data-iso="${iso}">${label}</button>`;
+      }).join('')}
+    </div>`;
+
+  popover.querySelectorAll('.copy-day-option').forEach(btn => {
+    btn.addEventListener('click', () => {
+      specificAvail[targetIso] = new Set(specificAvail[btn.dataset.iso] || []);
+      refreshSpecificDesktopGrid();
+      refreshSpecificMobileSlots();
+      closeCopyPopover();
+      // Flash the target column
+      document.querySelectorAll(`#specificDesktopGrid .spec-slot[data-iso="${targetIso}"].on`).forEach((el, i) => {
+        setTimeout(() => {
+          el.classList.add('slot-copy-flash');
+          el.addEventListener('animationend', () => el.classList.remove('slot-copy-flash'), { once: true });
+        }, i * 6);
+      });
+    });
+  });
+
+  anchorBtn.parentElement.style.position = 'relative';
+  anchorBtn.parentElement.appendChild(popover);
+  activeCopyPopover = popover;
+  setTimeout(() => document.addEventListener('click', closeCopyPopover, { once: true }), 0);
 }
 
 function _buildSpecificMobileTabs() {

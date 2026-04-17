@@ -120,25 +120,53 @@ function _renderAdminDatePicker(wrapperId, selectedDates, onChange) {
     const daysInMo  = new Date(yr, mo + 1, 0).getDate();
 
     // Header row (Mon-first: Mon=0 … Sun=6)
-    const dayHeaders = ['Mo','Tu','We','Th','Fr','Sa','Su']
+    // Col 0 = week-select button, Cols 1-7 = day headers
+    const cellStyle = 'display:flex;align-items:center;justify-content:center;width:2rem;height:2rem;border-radius:50%;cursor:pointer;font-size:0.85rem;transition:background 0.12s;margin:0 auto;';
+    const dayHeaders = `<div></div>` + ['Mo','Tu','We','Th','Fr','Sa','Su']
       .map(d => `<div style="text-align:center;font-size:0.72rem;font-weight:700;color:var(--text-muted);padding:0.2rem 0;">${d}</div>`)
       .join('');
 
     // Offset: convert Sun=0 to Mon-first offset
     const offset = (firstDay + 6) % 7;
-    const blanks  = Array(offset).fill('<div></div>').join('');
 
-    const dayCells = Array.from({ length: daysInMo }, (_, i) => {
-      const day   = i + 1;
-      const iso   = `${yr}-${String(mo + 1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-      const sel   = selectedDates.includes(iso);
-      return `<div onclick="_adminPickerToggle('${wrapperId}','${iso}')"
-        style="text-align:center;padding:0.3rem 0;border-radius:50%;cursor:pointer;font-size:0.85rem;
-          ${sel ? 'background:var(--primary);color:#fff;font-weight:700;' : 'color:var(--text);'}
-          transition:background 0.12s;"
-        onmouseenter="this.style.opacity='0.8'"
-        onmouseleave="this.style.opacity='1'">${day}</div>`;
-    }).join('');
+    // Build week rows: each row = [weekSelectBtn, 7 day cells]
+    // Total grid cells (after header) = offset blanks + daysInMo days, padded to multiples of 7
+    const totalCells = offset + daysInMo;
+    const rows = Math.ceil(totalCells / 7);
+    let gridCells = '';
+    for (let row = 0; row < rows; row++) {
+      // Collect ISO dates in this row
+      const rowIsos = [];
+      for (let col = 0; col < 7; col++) {
+        const cellIndex = row * 7 + col;
+        const day = cellIndex - offset + 1;
+        if (day >= 1 && day <= daysInMo) {
+          rowIsos.push(`${yr}-${String(mo + 1).padStart(2,'0')}-${String(day).padStart(2,'0')}`);
+        }
+      }
+      const allSel = rowIsos.length > 0 && rowIsos.every(iso => selectedDates.includes(iso));
+      const isoList = JSON.stringify(rowIsos).replace(/"/g, "'");
+      gridCells += `<div title="Select week" onclick="_adminPickerWeek('${wrapperId}',${isoList})"
+        style="${cellStyle}font-size:0.65rem;color:var(--text-muted);background:${allSel ? 'var(--primary-pale)' : 'transparent'};border:1px solid ${allSel ? 'var(--primary-light)' : 'transparent'};font-weight:600;">
+        W${row + 1}
+      </div>`;
+      for (let col = 0; col < 7; col++) {
+        const cellIndex = row * 7 + col;
+        const day = cellIndex - offset + 1;
+        if (day >= 1 && day <= daysInMo) {
+          const iso = `${yr}-${String(mo + 1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+          const sel = selectedDates.includes(iso);
+          gridCells += `<div onclick="_adminPickerToggle('${wrapperId}','${iso}')"
+            style="${cellStyle}${sel ? 'background:var(--primary);color:#fff;font-weight:700;' : 'color:var(--text);'}"
+            onmouseenter="if(!this.style.background||this.style.background==='transparent'||this.style.background==='')this.style.background='var(--primary-pale)'"
+            onmouseleave="this.style.background='${sel ? 'var(--primary)' : ''}'">
+            ${day}
+          </div>`;
+        } else {
+          gridCells += '<div></div>';
+        }
+      }
+    }
 
     // Selected date pills
     const sorted = [...selectedDates].sort();
@@ -161,11 +189,11 @@ function _renderAdminDatePicker(wrapperId, selectedDates, onChange) {
           <button type="button" class="btn btn-ghost btn-sm" style="padding:0.2rem 0.5rem;"
             onclick="_adminPickerNav('${wrapperId}',1)">›</button>
         </div>
-        <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:0.15rem;">
-          ${dayHeaders}${blanks}${dayCells}
+        <div style="display:grid;grid-template-columns:2rem repeat(7,1fr);gap:0.2rem;align-items:center;">
+          ${dayHeaders}${gridCells}
         </div>
         ${pills ? `<div style="display:flex;flex-wrap:wrap;gap:0.3rem;margin-top:0.6rem;">${pills}</div>` : ''}
-        ${!selectedDates.length ? '<p class="text-muted" style="font-size:0.75rem;margin-top:0.4rem;">Click dates to select them.</p>' : ''}
+        ${!selectedDates.length ? '<p class="text-muted" style="font-size:0.75rem;margin-top:0.4rem;">Click dates or W# to select a whole week.</p>' : ''}
       </div>`;
     // stash callback so toggle/nav can call it
     wrap._onChange = onChange;
@@ -191,6 +219,21 @@ function _adminPickerToggle(wrapperId, iso) {
   const idx   = dates.indexOf(iso);
   if (idx >= 0) dates.splice(idx, 1);
   else          dates.push(iso);
+  wrap._onChange?.(dates);
+  wrap._pickerRender?.();
+}
+
+function _adminPickerWeek(wrapperId, isos) {
+  const wrap = document.getElementById(wrapperId);
+  if (!wrap || !isos.length) return;
+  const dates = wrap._selectedDates;
+  // If all already selected → deselect all; otherwise → select all
+  const allSel = isos.every(iso => dates.includes(iso));
+  for (const iso of isos) {
+    const idx = dates.indexOf(iso);
+    if (allSel) { if (idx >= 0) dates.splice(idx, 1); }
+    else        { if (idx < 0)  dates.push(iso); }
+  }
   wrap._onChange?.(dates);
   wrap._pickerRender?.();
 }
